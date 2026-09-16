@@ -2,7 +2,7 @@
   "use strict";
 
   var S = window.StreamSync;
-  var POLL_MS = 3000;
+    var POLL_MS = 2500;
   var HEARTBEAT_MS = 12000;
   var TICK_ALIGN_MS = 250;
 
@@ -126,16 +126,33 @@
     return "Join my StreamSync room and enter the match clock on your TV so we can see who is ahead: " + roomLink();
   }
 
+  async function fetchJson(url) {
+    var ctrl = new AbortController();
+    var timer = setTimeout(function () { ctrl.abort(); }, 8000);
+    try {
+      var res = await fetch(url, { cache: "no-store", signal: ctrl.signal });
+      return await res.json();
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   async function kvGet(key) {
-    var res = await fetch(S.kvGetUrl(key), { cache: "no-store" });
-    var data = await res.json();
+    var data = await fetchJson(S.kvGetUrl(key));
     return S.parseKvResponse(data, "get");
   }
 
   async function kvSet(key, value) {
-    var res = await fetch(S.kvSetUrl(key, value), { cache: "no-store" });
-    var data = await res.json();
-    return S.parseKvResponse(data, "set");
+    var data = await fetchJson(S.kvSetUrl(key, value));
+    if (!S.parseKvResponse(data, "set")) {
+      throw new Error("kv set failed");
+    }
+    return true;
+  }
+
+  function markLive() {
+    state.lastGoodSync = Date.now();
+    setNetState("live");
   }
 
   function applyViewer(record) {
@@ -179,21 +196,23 @@
     var keys = S.roomKeys(state.roomId);
     var payload = livePayload(options.leave ? "leave" : "sync");
     publishLocal(payload);
-    var jobs = [];
-    if (options.leave) {
-      jobs.push(kvSet(keys.user(state.userId), "LEFT"));
-    } else {
-      jobs.push(kvSet(keys.user(state.userId), payload.body));
-      if (options.roster) jobs.push(ensureRoster());
-    }
-    jobs.push(publishLive(payload).catch(function () {}));
+    var kvOk = false;
+    var liveOk = false;
     try {
-      await Promise.all(jobs);
-      state.lastGoodSync = Date.now();
-      setNetState("live");
-    } catch (err) {
-      setNetState(state.lastGoodSync ? "degraded" : "offline");
-    }
+      if (options.leave) {
+        await kvSet(keys.user(state.userId), "LEFT");
+      } else {
+        await kvSet(keys.user(state.userId), payload.body);
+        if (options.roster) await ensureRoster();
+      }
+      kvOk = true;
+    } catch (err) {}
+    try {
+      await publishLive(payload);
+      liveOk = true;
+    } catch (err) {}
+    if (kvOk || liveOk) markLive();
+    else setNetState(state.lastGoodSync ? "degraded" : "offline");
     render();
   }
 
@@ -222,11 +241,11 @@
       }));
       rows.forEach(applyViewer);
       rememberMe();
-      state.lastGoodSync = Date.now();
-      setNetState("live");
+      markLive();
       render();
     } catch (err) {
-      setNetState(state.lastGoodSync ? "degraded" : "offline");
+      if (!state.lastGoodSync) setNetState("offline");
+      else if (Date.now() - state.lastGoodSync > 20000) setNetState("degraded");
     } finally {
       pollInFlight = false;
     }
@@ -244,6 +263,7 @@
     var record = S.decodeViewer(msg.id, msg.body);
     var isNew = record && record.userId !== state.userId && !state.participants[record.userId];
     applyViewer(record);
+    markLive();
     render();
     if (isNew) {
       if (!announceTimer) {
@@ -266,8 +286,8 @@
           handleLiveMessage(envelope.message);
         } catch (err) {}
       };
-      eventSource.onerror = function () {
-        if (state.lastGoodSync) setNetState("degraded");
+      eventSource.onopen = function () {
+        if (state.roomId) markLive();
       };
     } catch (err) {}
 

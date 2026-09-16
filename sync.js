@@ -105,7 +105,8 @@
   }
 
   function decodeViewer(userId, raw) {
-    if (!raw || raw === "LEFT") {
+    if (raw == null || raw === "") return null;
+    if (raw === "LEFT") {
       return { userId: userId, left: true };
     }
     var parts = String(raw).split("|");

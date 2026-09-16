@@ -71,6 +71,7 @@ eq("decode match seconds", decoded.matchSecondsAtAnchor, 660);
 eq("decode paused", decoded.isPaused, false);
 eq("decode leftover flag", decoded.left, false);
 eq("left tombstone", sync.decodeViewer("abc12345", "LEFT").left, true);
+eq("missing payload is unknown, not leave", sync.decodeViewer("abc12345", null), null);
 eq("reject empty name", sync.decodeViewer("abc12345", "|1|1|0"), null);
 
 eq("roster unique", sync.encodeRoster(["aa", "bb", "aa", ""]), "aa,bb");
