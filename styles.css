@@ -309,6 +309,10 @@ input[type="number"] {
   letter-spacing: 0.04em;
 }
 
+.scorebug.is-following .scorebug-live {
+  background: var(--you);
+}
+
 .hint {
   margin: 8px 0 0;
   color: var(--muted);
@@ -445,6 +449,13 @@ button:focus-visible {
 .relative {
   color: var(--muted);
   font-size: 0.92rem;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
 }
 
 .toolbar .primary {

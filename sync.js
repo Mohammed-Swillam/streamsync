@@ -345,6 +345,43 @@
     return room === session.roomId;
   }
 
+  function pickRoomLeader(participants, now) {
+    now = now || Date.now();
+    var best = null;
+    var bestSecs = -1;
+    var count = 0;
+    (participants || []).forEach(function (p) {
+      if (!p || p.left || shouldDrop(p, now)) return;
+      count += 1;
+      var secs = calculateCurrentSeconds(p, now);
+      if (!best || secs > bestSecs) {
+        best = p;
+        bestSecs = secs;
+      }
+    });
+    if (!best) return null;
+    return {
+      userId: best.userId,
+      name: best.name,
+      matchSecondsAtAnchor: best.matchSecondsAtAnchor,
+      anchorTimestamp: best.anchorTimestamp,
+      isPaused: !!best.isPaused,
+      lastSeen: best.lastSeen,
+      calculatedSeconds: bestSecs,
+      viewerCount: count
+    };
+  }
+
+  function joinSeedHint(leader) {
+    if (!leader) return "";
+    var clock = formatMatchSeconds(leader.calculatedSeconds);
+    var name = leader.name || "the room";
+    if ((leader.viewerCount || 1) <= 1) {
+      return "Copied " + name + "'s clock (" + clock + "). Nudge it if your TV is behind or ahead.";
+    }
+    return "Started from " + name + ", the live edge (" + clock + "). Nudge it to match your TV.";
+  }
+
   return {
     ROOM_CODE_MAX: ROOM_CODE_MAX,
     NAME_MAX: NAME_MAX,
@@ -380,6 +417,8 @@
     parseKvResponse: parseKvResponse,
     buildSession: buildSession,
     parseStoredSession: parseStoredSession,
-    sessionShouldResume: sessionShouldResume
+    sessionShouldResume: sessionShouldResume,
+    pickRoomLeader: pickRoomLeader,
+    joinSeedHint: joinSeedHint
   };
 });

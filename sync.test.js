@@ -204,5 +204,56 @@ var paused = sync.parseStoredSession(
 );
 eq("paused session stays paused after refresh", sync.calculateCurrentSeconds(paused, savedAt + 60000), 2700);
 
+eq("empty room has no leader", sync.pickRoomLeader([], now), null);
+
+var only = sync.pickRoomLeader(
+  [
+    {
+      userId: "host",
+      name: "Elpop",
+      matchSecondsAtAnchor: 1800,
+      anchorTimestamp: now,
+      lastSeen: now,
+      isPaused: false
+    }
+  ],
+  now
+);
+eq("solo room leader is the only viewer", only.name, "Elpop");
+eq("solo room leader clock", only.calculatedSeconds, 1800);
+eq("solo room viewerCount", only.viewerCount, 1);
+eq(
+  "solo seed hint names the host",
+  sync.joinSeedHint(only).indexOf("Elpop") !== -1,
+  true
+);
+
+var ahead = sync.pickRoomLeader(
+  [
+    {
+      userId: "slow",
+      name: "Tom",
+      matchSecondsAtAnchor: 1800,
+      anchorTimestamp: now,
+      lastSeen: now
+    },
+    {
+      userId: "fast",
+      name: "Sara",
+      matchSecondsAtAnchor: 1830,
+      anchorTimestamp: now,
+      lastSeen: now
+    }
+  ],
+  now
+);
+eq("multi room leader is the live edge", ahead.name, "Sara");
+eq("multi room viewerCount", ahead.viewerCount, 2);
+eq(
+  "multi seed hint mentions live edge",
+  sync.joinSeedHint(ahead).indexOf("live edge") !== -1,
+  true
+);
+
 console.log("\n" + passed + " passed, " + failed + " failed");
 process.exit(failed ? 1 : 0);
