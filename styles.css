@@ -187,6 +187,16 @@ input[type="number"] {
 
 .scorebug {
   margin-top: 4px;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.scorebug * {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .scorebug-shell {
@@ -243,6 +253,7 @@ input[type="number"] {
   letter-spacing: 0.06em;
   text-shadow: 0 0 18px rgba(182, 255, 59, 0.28);
   line-height: 1;
+  touch-action: manipulation;
 }
 
 .scorebug.is-typing .scorebug-digits {
@@ -274,6 +285,7 @@ input[type="number"] {
   font-size: 1.2rem;
   font-weight: 700;
   background: #141c13;
+  touch-action: none;
 }
 
 .scorebug-part {
@@ -332,6 +344,9 @@ button {
   padding: 11px 12px;
   min-height: 44px;
   cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 button:hover { border-color: #4c6847; }

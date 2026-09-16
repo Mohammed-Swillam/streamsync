@@ -83,6 +83,11 @@
       notifyUser();
     }
 
+    function clearTextSelection() {
+      var sel = window.getSelection && window.getSelection();
+      if (sel && sel.removeAllRanges) sel.removeAllRanges();
+    }
+
     function stopHold() {
       clearTimeout(holdDelay);
       clearInterval(holdTimer);
@@ -90,21 +95,36 @@
       holdTimer = null;
     }
 
+    root.addEventListener("selectstart", function (event) {
+      event.preventDefault();
+    });
+    root.addEventListener("contextmenu", function (event) {
+      event.preventDefault();
+    });
+
     root.querySelectorAll(".scorebug-step").forEach(function (btn) {
       var part = btn.getAttribute("data-part");
       var delta = parseInt(btn.getAttribute("data-delta"), 10);
       function run() {
         step(part, delta);
+        clearTextSelection();
       }
-      btn.addEventListener("pointerdown", function (event) {
+      function startHold(event) {
         if (event.pointerType === "mouse" && event.button !== 0) return;
         event.preventDefault();
-        if (btn.setPointerCapture) btn.setPointerCapture(event.pointerId);
+        clearTextSelection();
+        if (btn.setPointerCapture && event.pointerId != null) {
+          btn.setPointerCapture(event.pointerId);
+        }
         run();
         holdDelay = setTimeout(function () {
           holdTimer = setInterval(run, 75);
         }, 360);
-      });
+      }
+      btn.addEventListener("pointerdown", startHold);
+      btn.addEventListener("touchstart", function (event) {
+        event.preventDefault();
+      }, { passive: false });
       btn.addEventListener("pointerup", stopHold);
       btn.addEventListener("pointercancel", stopHold);
       btn.addEventListener("lostpointercapture", stopHold);
