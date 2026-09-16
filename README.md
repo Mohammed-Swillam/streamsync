@@ -43,7 +43,7 @@ The first `index.html` in this repo looked finished, but it did not solve the ac
 ## How to use it
 
 1. Open the page.
-2. Enter your name, a room code, and the minutes:seconds on your TV.
+2. Enter your name, a room code, and the match clock on your TV. Use + / − or tap the digits and type `1040` for 10:40.
 3. Join, then send friends the room link.
 4. They type **their** TV clock when they join. The list shows who is ahead.
 5. Refreshing keeps you in the room. Tap **Exit** when you want to leave.

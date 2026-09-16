@@ -31,6 +31,17 @@ eq("format ignores junk", sync.formatMatchSeconds("nope"), "00:00");
 eq("parse clock 10:40", sync.parseClockInputs("10", "40"), 640);
 eq("parse clamps seconds", sync.parseClockInputs(12, 99), 12 * 60 + 59);
 eq("parse empty", sync.parseClockInputs("", ""), 0);
+eq("type 7 means 7:00", sync.parseTypedClock("7"), 7 * 60);
+eq("type 73 means 73:00", sync.parseTypedClock("73"), 73 * 60);
+eq("type 730 means 7:30", sync.parseTypedClock("730"), 7 * 60 + 30);
+eq("type 1040 means 10:40", sync.parseTypedClock("1040"), 640);
+eq("type 73:08", sync.parseTypedClock("73:08"), 73 * 60 + 8);
+eq("type 104:00 extra time", sync.parseTypedClock("10400"), 104 * 60);
+eq("typed seconds clamp at 59", sync.parseTypedClock("1061"), 10 * 60 + 59);
+eq("split 10:40", sync.splitClock(640).minutes, 10);
+eq("step +1 minute", sync.stepClock(640, "min", 1), 700);
+eq("step +1 second wraps", sync.stepClock(10 * 60 + 59, "sec", 1), 11 * 60);
+eq("step -1 second at zero stays", sync.stepClock(0, "sec", -1), 0);
 
 var frozen = Date.now();
 eq(

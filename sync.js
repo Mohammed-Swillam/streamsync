@@ -36,6 +36,52 @@
     return mins * 60 + secs;
   }
 
+  var MAX_MINUTES = 199;
+
+  function splitClock(totalSeconds) {
+    var secs = Math.max(0, Math.floor(Number(totalSeconds) || 0));
+    var maxTotal = MAX_MINUTES * 60 + 59;
+    if (secs > maxTotal) secs = maxTotal;
+    return {
+      minutes: Math.floor(secs / 60),
+      seconds: secs % 60,
+      total: secs
+    };
+  }
+
+  function stepClock(totalSeconds, part, delta) {
+    var parts = splitClock(totalSeconds);
+    var step = Math.floor(Number(delta) || 0);
+    if (!step) return parts.total;
+    if (part === "min") {
+      parts.minutes = clampInt(parts.minutes + step, 0, MAX_MINUTES, 0);
+      return parts.minutes * 60 + parts.seconds;
+    }
+    var next = parts.total + step;
+    if (next < 0) return 0;
+    return splitClock(next).total;
+  }
+
+  function parseTypedClock(raw) {
+    var digits = String(raw || "").replace(/\D/g, "").slice(0, 5);
+    if (!digits) return 0;
+    var minutes = 0;
+    var seconds = 0;
+    if (digits.length <= 2) {
+      minutes = parseInt(digits, 10);
+    } else if (digits.length === 3) {
+      minutes = parseInt(digits.charAt(0), 10);
+      seconds = parseInt(digits.slice(1), 10);
+    } else if (digits.length === 4) {
+      minutes = parseInt(digits.slice(0, 2), 10);
+      seconds = parseInt(digits.slice(2), 10);
+    } else {
+      minutes = parseInt(digits.slice(0, 3), 10);
+      seconds = parseInt(digits.slice(3), 10);
+    }
+    return parseClockInputs(minutes, seconds);
+  }
+
   function calculateCurrentSeconds(participant, now) {
     now = now || Date.now();
     if (!participant) return 0;
@@ -308,6 +354,10 @@
     KV_BASE: KV_BASE,
     formatMatchSeconds: formatMatchSeconds,
     parseClockInputs: parseClockInputs,
+    splitClock: splitClock,
+    stepClock: stepClock,
+    parseTypedClock: parseTypedClock,
+    MAX_MINUTES: MAX_MINUTES,
     calculateCurrentSeconds: calculateCurrentSeconds,
     sanitizeRoomCode: sanitizeRoomCode,
     sanitizeName: sanitizeName,

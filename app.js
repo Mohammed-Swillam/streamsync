@@ -31,9 +31,106 @@
   var eventSource = null;
   var broadcast = null;
   var audioCtx = null;
+  var joinClock = null;
+  var exactClock = null;
 
   function $(id) {
     return document.getElementById(id);
+  }
+
+  function createScorebug(root) {
+    var total = 0;
+    var minEl = root.querySelector(".scorebug-digits[data-part='min']");
+    var secEl = root.querySelector(".scorebug-digits[data-part='sec']");
+    var typeEl = root.querySelector(".scorebug-type");
+    var holdTimer = null;
+    var holdDelay = null;
+
+    function render() {
+      var parts = S.splitClock(total);
+      minEl.textContent = String(parts.minutes).padStart(2, "0");
+      secEl.textContent = String(parts.seconds).padStart(2, "0");
+      root.setAttribute("data-total", String(parts.total));
+    }
+
+    function set(seconds) {
+      total = S.splitClock(seconds).total;
+      typeEl.value = "";
+      root.classList.remove("is-typing");
+      render();
+    }
+
+    function get() {
+      return S.splitClock(total).total;
+    }
+
+    function step(part, delta) {
+      total = S.stepClock(total, part, delta);
+      typeEl.value = "";
+      root.classList.remove("is-typing");
+      render();
+    }
+
+    function stopHold() {
+      clearTimeout(holdDelay);
+      clearInterval(holdTimer);
+      holdDelay = null;
+      holdTimer = null;
+    }
+
+    root.querySelectorAll(".scorebug-step").forEach(function (btn) {
+      var part = btn.getAttribute("data-part");
+      var delta = parseInt(btn.getAttribute("data-delta"), 10);
+      function run() {
+        step(part, delta);
+      }
+      btn.addEventListener("pointerdown", function (event) {
+        if (event.pointerType === "mouse" && event.button !== 0) return;
+        event.preventDefault();
+        if (btn.setPointerCapture) btn.setPointerCapture(event.pointerId);
+        run();
+        holdDelay = setTimeout(function () {
+          holdTimer = setInterval(run, 75);
+        }, 360);
+      });
+      btn.addEventListener("pointerup", stopHold);
+      btn.addEventListener("pointercancel", stopHold);
+      btn.addEventListener("lostpointercapture", stopHold);
+    });
+
+    root.querySelectorAll(".scorebug-digits").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        typeEl.focus();
+        typeEl.click();
+      });
+    });
+
+    typeEl.addEventListener("focus", function () {
+      root.classList.add("is-typing");
+      typeEl.value = "";
+    });
+
+    typeEl.addEventListener("input", function () {
+      var raw = typeEl.value.replace(/\D/g, "").slice(0, 5);
+      typeEl.value = raw;
+      if (raw) total = S.parseTypedClock(raw);
+      render();
+    });
+
+    typeEl.addEventListener("blur", function () {
+      root.classList.remove("is-typing");
+      typeEl.value = "";
+      render();
+    });
+
+    root.querySelectorAll(".scorebug-presets [data-preset]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        set(parseInt(btn.getAttribute("data-preset"), 10));
+      });
+    });
+
+    render();
+    return { set: set, get: get };
   }
 
   function showToast(message) {
@@ -232,6 +329,7 @@
     if (!state.roomId) return;
     if (options.leave) clearSession();
     else persistSession();
+    render();
     var keys = S.roomKeys(state.roomId);
     var payload = livePayload(options.leave ? "leave" : "sync");
     publishLocal(payload);
@@ -607,6 +705,8 @@
   }
 
   function bind() {
+    joinClock = createScorebug($("joinScorebug"));
+    exactClock = createScorebug($("exactScorebug"));
     loadPersisted();
     var params = new URLSearchParams(window.location.search);
     var roomParam = S.sanitizeRoomCode(params.get("room") || "");
@@ -617,8 +717,7 @@
     if (saved && S.sessionShouldResume(saved, roomParam)) {
       var current = S.calculateCurrentSeconds(saved, Date.now());
       $("joinUserNameInput").value = saved.name;
-      $("initialMinInput").value = Math.floor(current / 60);
-      $("initialSecInput").value = current % 60;
+      joinClock.set(current);
       enterRoom({
         name: saved.name,
         room: saved.roomId,
@@ -641,11 +740,12 @@
         $("joinUserNameInput").focus();
         return;
       }
+      var picked = S.splitClock(joinClock.get());
       enterRoom({
         name: name,
         room: $("joinRoomCodeInput").value,
-        minutes: $("initialMinInput").value,
-        seconds: $("initialSecInput").value
+        minutes: picked.minutes,
+        seconds: picked.seconds
       });
     });
 
@@ -674,13 +774,12 @@
 
     $("pauseBtn").addEventListener("click", togglePause);
     $("openExactBtn").addEventListener("click", function () {
-      var current = S.calculateCurrentSeconds(myRecord());
-      $("exactMinInput").value = Math.floor(current / 60);
-      $("exactSecInput").value = current % 60;
+      exactClock.set(S.calculateCurrentSeconds(myRecord()));
       openModal("exactModal");
     });
     $("saveExactBtn").addEventListener("click", function () {
-      setExact($("exactMinInput").value, $("exactSecInput").value);
+      var picked = S.splitClock(exactClock.get());
+      setExact(picked.minutes, picked.seconds);
       closeModal("exactModal");
     });
     $("cancelExactBtn").addEventListener("click", function () {
