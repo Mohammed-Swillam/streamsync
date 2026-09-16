@@ -11,6 +11,7 @@
   var ROOM_CODE_MAX = 24;
   var NAME_MAX = 20;
   var STALE_DROP_MS = 4 * 60 * 60 * 1000;
+  var SESSION_MAX_AGE_MS = 8 * 60 * 60 * 1000;
   var ONLINE_MS = 25 * 1000;
   var KV_BASE = "https://api.keyval.org";
 
@@ -253,10 +254,56 @@
     return mode === "get" ? data.val : true;
   }
 
+  function buildSession(input, now) {
+    now = now || Date.now();
+    var roomId = sanitizeRoomCode(input && input.roomId);
+    var name = sanitizeName(input && input.name);
+    if (!roomId || !name) return null;
+    return {
+      roomId: roomId,
+      name: name,
+      matchSecondsAtAnchor: Math.max(0, Math.floor(Number(input.matchSecondsAtAnchor) || 0)),
+      anchorTimestamp: Math.floor(Number(input.anchorTimestamp) || now),
+      isPaused: !!(input && input.isPaused),
+      savedAt: now
+    };
+  }
+
+  function parseStoredSession(raw, now) {
+    now = now || Date.now();
+    var data = raw;
+    if (raw == null || raw === "") return null;
+    if (typeof raw === "string") {
+      try {
+        data = JSON.parse(raw);
+      } catch (err) {
+        return null;
+      }
+    }
+    if (!data || typeof data !== "object") return null;
+    var session = buildSession(data, now);
+    if (!session) return null;
+    var savedAt = Number(data.savedAt) || session.anchorTimestamp;
+    if (now - savedAt > SESSION_MAX_AGE_MS) return null;
+    session.savedAt = savedAt;
+    session.matchSecondsAtAnchor = Math.max(0, Math.floor(Number(data.matchSecondsAtAnchor) || 0));
+    session.anchorTimestamp = Math.floor(Number(data.anchorTimestamp) || now);
+    session.isPaused = !!data.isPaused;
+    return session;
+  }
+
+  function sessionShouldResume(session, roomFromUrl) {
+    if (!session) return false;
+    var room = sanitizeRoomCode(roomFromUrl);
+    if (!room) return true;
+    return room === session.roomId;
+  }
+
   return {
     ROOM_CODE_MAX: ROOM_CODE_MAX,
     NAME_MAX: NAME_MAX,
     STALE_DROP_MS: STALE_DROP_MS,
+    SESSION_MAX_AGE_MS: SESSION_MAX_AGE_MS,
     ONLINE_MS: ONLINE_MS,
     KV_BASE: KV_BASE,
     formatMatchSeconds: formatMatchSeconds,
@@ -280,6 +327,9 @@
     escapeHtml: escapeHtml,
     kvSetUrl: kvSetUrl,
     kvGetUrl: kvGetUrl,
-    parseKvResponse: parseKvResponse
+    parseKvResponse: parseKvResponse,
+    buildSession: buildSession,
+    parseStoredSession: parseStoredSession,
+    sessionShouldResume: sessionShouldResume
   };
 });

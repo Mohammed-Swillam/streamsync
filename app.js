@@ -2,9 +2,13 @@
   "use strict";
 
   var S = window.StreamSync;
-    var POLL_MS = 2500;
+  var POLL_MS = 2500;
   var HEARTBEAT_MS = 12000;
   var TICK_ALIGN_MS = 250;
+  var UID_KEY = "streamsync:uid";
+  var NAME_KEY = "streamsync:name";
+  var SOUND_KEY = "streamsync:sound";
+  var SESSION_KEY = "streamsync:session";
 
   var state = {
     userId: "",
@@ -60,28 +64,61 @@
     } catch (err) {}
   }
 
+  function storageGet(key) {
+    try { return localStorage.getItem(key); } catch (err) { return null; }
+  }
+
+  function storageSet(key, value) {
+    try { localStorage.setItem(key, value); } catch (err) {}
+  }
+
+  function storageRemove(key) {
+    try { localStorage.removeItem(key); } catch (err) {}
+  }
+
   function getUserId() {
-    try {
-      var existing = sessionStorage.getItem("streamsync:uid");
-      if (existing && existing.length >= 6) return existing;
-      var id = S.makeUserId();
-      sessionStorage.setItem("streamsync:uid", id);
-      return id;
-    } catch (err) {
-      return S.makeUserId();
+    var existing = storageGet(UID_KEY);
+    if (!existing) {
+      try { existing = sessionStorage.getItem(UID_KEY); } catch (err) {}
     }
+    if (existing && existing.length >= 6) {
+      storageSet(UID_KEY, existing);
+      return existing;
+    }
+    var id = S.makeUserId();
+    storageSet(UID_KEY, id);
+    return id;
   }
 
   function persistName(name) {
-    try { localStorage.setItem("streamsync:name", name); } catch (err) {}
+    storageSet(NAME_KEY, name);
+  }
+
+  function persistSession() {
+    if (!state.roomId || !state.name) return;
+    var session = S.buildSession({
+      roomId: state.roomId,
+      name: state.name,
+      matchSecondsAtAnchor: state.matchSecondsAtAnchor,
+      anchorTimestamp: state.anchorTimestamp,
+      isPaused: state.isPaused
+    });
+    if (!session) return;
+    storageSet(SESSION_KEY, JSON.stringify(session));
+  }
+
+  function clearSession() {
+    storageRemove(SESSION_KEY);
+  }
+
+  function readSession() {
+    return S.parseStoredSession(storageGet(SESSION_KEY), Date.now());
   }
 
   function loadPersisted() {
-    try {
-      var name = localStorage.getItem("streamsync:name");
-      if (name) $("joinUserNameInput").value = name;
-      state.soundEnabled = localStorage.getItem("streamsync:sound") === "1";
-    } catch (err) {}
+    var name = storageGet(NAME_KEY);
+    if (name) $("joinUserNameInput").value = name;
+    state.soundEnabled = storageGet(SOUND_KEY) === "1";
     updateSoundButton();
   }
 
@@ -193,6 +230,8 @@
     options = options || {};
     rememberMe();
     if (!state.roomId) return;
+    if (options.leave) clearSession();
+    else persistSession();
     var keys = S.roomKeys(state.roomId);
     var payload = livePayload(options.leave ? "leave" : "sync");
     publishLocal(payload);
@@ -509,16 +548,24 @@
     }
   }
 
-  function enterRoom(name, room, minutes, seconds) {
+  function enterRoom(options) {
+    options = options || {};
     state.userId = getUserId();
-    state.name = S.sanitizeName(name);
-    state.roomId = S.sanitizeRoomCode(room) || S.randomRoomCode();
-    state.matchSecondsAtAnchor = S.parseClockInputs(minutes, seconds);
-    state.anchorTimestamp = Date.now();
-    state.isPaused = false;
+    state.name = S.sanitizeName(options.name);
+    state.roomId = S.sanitizeRoomCode(options.room) || S.randomRoomCode();
+    if (options.resumed) {
+      state.matchSecondsAtAnchor = Math.max(0, Math.floor(Number(options.matchSecondsAtAnchor) || 0));
+      state.anchorTimestamp = Number(options.anchorTimestamp) || Date.now();
+      state.isPaused = !!options.isPaused;
+    } else {
+      state.matchSecondsAtAnchor = S.parseClockInputs(options.minutes, options.seconds);
+      state.anchorTimestamp = Date.now();
+      state.isPaused = false;
+    }
     state.participants = {};
     persistName(state.name);
     rememberMe();
+    persistSession();
 
     $("welcomeView").classList.add("hidden");
     $("dashboardView").classList.remove("hidden");
@@ -535,7 +582,7 @@
     startTimers();
     publishMe({ roster: true });
     fetchRoom();
-    showToast("Joined " + state.roomId);
+    showToast((options.resumed ? "Welcome back to " : "Joined ") + state.roomId);
     playTone(520);
   }
 
@@ -543,6 +590,7 @@
     try { await publishMe({ leave: true }); } catch (err) {}
     stopTimers();
     stopLiveChannel();
+    clearSession();
     state.roomId = "";
     state.participants = {};
     $("dashboardView").classList.add("hidden");
@@ -562,7 +610,24 @@
     loadPersisted();
     var params = new URLSearchParams(window.location.search);
     var roomParam = S.sanitizeRoomCode(params.get("room") || "");
+    var saved = readSession();
     if (roomParam) $("joinRoomCodeInput").value = roomParam;
+    else if (saved) $("joinRoomCodeInput").value = saved.roomId;
+
+    if (saved && S.sessionShouldResume(saved, roomParam)) {
+      var current = S.calculateCurrentSeconds(saved, Date.now());
+      $("joinUserNameInput").value = saved.name;
+      $("initialMinInput").value = Math.floor(current / 60);
+      $("initialSecInput").value = current % 60;
+      enterRoom({
+        name: saved.name,
+        room: saved.roomId,
+        matchSecondsAtAnchor: saved.matchSecondsAtAnchor,
+        anchorTimestamp: saved.anchorTimestamp,
+        isPaused: saved.isPaused,
+        resumed: true
+      });
+    }
 
     $("generateRandomRoomBtn").addEventListener("click", function () {
       $("joinRoomCodeInput").value = S.randomRoomCode();
@@ -576,17 +641,17 @@
         $("joinUserNameInput").focus();
         return;
       }
-      enterRoom(
-        name,
-        $("joinRoomCodeInput").value,
-        $("initialMinInput").value,
-        $("initialSecInput").value
-      );
+      enterRoom({
+        name: name,
+        room: $("joinRoomCodeInput").value,
+        minutes: $("initialMinInput").value,
+        seconds: $("initialSecInput").value
+      });
     });
 
     $("soundToggleBtn").addEventListener("click", function () {
       state.soundEnabled = !state.soundEnabled;
-      try { localStorage.setItem("streamsync:sound", state.soundEnabled ? "1" : "0"); } catch (err) {}
+      storageSet(SOUND_KEY, state.soundEnabled ? "1" : "0");
       updateSoundButton();
       if (state.soundEnabled) playTone(440);
     });

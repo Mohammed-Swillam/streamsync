@@ -149,5 +149,49 @@ var dropped = sync.decorateParticipants(
 );
 eq("drops abandoned viewers after 4h", dropped.length, 1);
 
+var savedAt = 1_700_000_000_000;
+var session = sync.buildSession(
+  {
+    roomId: "BARCA",
+    name: "Elpop",
+    matchSecondsAtAnchor: 640,
+    anchorTimestamp: savedAt,
+    isPaused: false
+  },
+  savedAt
+);
+eq("session keeps room", session.roomId, "BARCA");
+eq("session keeps name", session.name, "Elpop");
+
+var parsed = sync.parseStoredSession(JSON.stringify(session), savedAt + 15000);
+eq("session survives JSON roundtrip", parsed.matchSecondsAtAnchor, 640);
+eq(
+  "clock continues after refresh",
+  sync.calculateCurrentSeconds(parsed, savedAt + 15000),
+  655
+);
+eq("resume when url room matches", sync.sessionShouldResume(parsed, "BARCA"), true);
+eq("resume when url has no room", sync.sessionShouldResume(parsed, ""), true);
+eq("do not resume a different room", sync.sessionShouldResume(parsed, "MADRID"), false);
+eq("reject junk session", sync.parseStoredSession("not-json", savedAt), null);
+eq(
+  "reject expired session",
+  sync.parseStoredSession(JSON.stringify(session), savedAt + sync.SESSION_MAX_AGE_MS + 1),
+  null
+);
+
+var paused = sync.parseStoredSession(
+  JSON.stringify({
+    roomId: "BARCA",
+    name: "Elpop",
+    matchSecondsAtAnchor: 2700,
+    anchorTimestamp: savedAt,
+    isPaused: true,
+    savedAt: savedAt
+  }),
+  savedAt + 60000
+);
+eq("paused session stays paused after refresh", sync.calculateCurrentSeconds(paused, savedAt + 60000), 2700);
+
 console.log("\n" + passed + " passed, " + failed + " failed");
 process.exit(failed ? 1 : 0);

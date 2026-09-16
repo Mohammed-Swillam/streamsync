@@ -37,6 +37,7 @@ The first `index.html` in this repo looked finished, but it did not solve the ac
 - If you are ahead, the caution timer is the gap to the slowest person, not only the next person.
 - Names, toasts, and leaderboard rows do not use unsanitized HTML.
 - WhatsApp and Telegram open real share URLs.
+- Refreshing the page restores the same person, room, and match clock from localStorage.
 - Unit tests cover clock math, sorting, and encode/decode.
 
 ## How to use it
@@ -45,7 +46,7 @@ The first `index.html` in this repo looked finished, but it did not solve the ac
 2. Enter your name, a room code, and the minutes:seconds on your TV.
 3. Join, then send friends the room link.
 4. They type **their** TV clock when they join. The list shows who is ahead.
-5. When a whistle or graphic hits a round time, tap **Set exact time** or use the nudge buttons.
+5. Refreshing keeps you in the room. Tap **Exit** when you want to leave.
 
 Local preview:
 
