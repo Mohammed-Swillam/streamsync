@@ -1,0 +1,152 @@
+"use strict";
+
+var sync = require("./sync.js");
+var failed = 0;
+var passed = 0;
+
+function assert(name, condition) {
+  if (condition) {
+    passed += 1;
+    console.log("ok  - " + name);
+  } else {
+    failed += 1;
+    console.error("fail - " + name);
+  }
+}
+
+function eq(name, actual, expected) {
+  var ok = actual === expected;
+  if (!ok) {
+    console.error("     expected", expected, "got", actual);
+  }
+  assert(name, ok);
+}
+
+eq("format 0", sync.formatMatchSeconds(0), "00:00");
+eq("format 10:40", sync.formatMatchSeconds(640), "10:40");
+eq("format 90:00", sync.formatMatchSeconds(5400), "90:00");
+eq("format extra time 93:12", sync.formatMatchSeconds(5592), "93:12");
+eq("format ignores junk", sync.formatMatchSeconds("nope"), "00:00");
+
+eq("parse clock 10:40", sync.parseClockInputs("10", "40"), 640);
+eq("parse clamps seconds", sync.parseClockInputs(12, 99), 12 * 60 + 59);
+eq("parse empty", sync.parseClockInputs("", ""), 0);
+
+var frozen = Date.now();
+eq(
+  "paused clock stays put",
+  sync.calculateCurrentSeconds(
+    { matchSecondsAtAnchor: 640, anchorTimestamp: frozen - 15000, isPaused: true },
+    frozen
+  ),
+  640
+);
+eq(
+  "running clock adds elapsed wall time",
+  sync.calculateCurrentSeconds(
+    { matchSecondsAtAnchor: 640, anchorTimestamp: frozen - 10500, isPaused: false },
+    frozen
+  ),
+  650
+);
+
+eq("sanitize room keeps readable code", sync.sanitizeRoomCode("  derby-7k3q! "), "DERBY-7K3Q");
+eq("sanitize room strips junk", sync.sanitizeRoomCode("el clasico 24"), "ELCLASICO24");
+eq("sanitize name trims and blocks pipes", sync.sanitizeName("  Alex | TV  "), "Alex TV");
+
+var encoded = sync.encodeViewer(
+  {
+    name: "Sara",
+    matchSecondsAtAnchor: 660,
+    anchorTimestamp: 1789591008000,
+    isPaused: false
+  },
+  1789591012000
+);
+eq("encode viewer compact string", encoded, "Sara|660|1789591008|0|1789591012");
+
+var decoded = sync.decodeViewer("abc12345", encoded);
+eq("decode name", decoded.name, "Sara");
+eq("decode match seconds", decoded.matchSecondsAtAnchor, 660);
+eq("decode paused", decoded.isPaused, false);
+eq("decode leftover flag", decoded.left, false);
+eq("left tombstone", sync.decodeViewer("abc12345", "LEFT").left, true);
+eq("reject empty name", sync.decodeViewer("abc12345", "|1|1|0"), null);
+
+eq("roster unique", sync.encodeRoster(["aa", "bb", "aa", ""]), "aa,bb");
+eq("roster decode", sync.decodeRoster("aa,bb,aa").join(","), "aa,bb");
+
+var now = 1_000_000;
+var ranked = sync.decorateParticipants(
+  [
+    {
+      userId: "slow",
+      name: "Tom",
+      matchSecondsAtAnchor: 640,
+      anchorTimestamp: now,
+      lastSeen: now,
+      isPaused: false
+    },
+    {
+      userId: "fast",
+      name: "Sara",
+      matchSecondsAtAnchor: 655,
+      anchorTimestamp: now,
+      lastSeen: now,
+      isPaused: false
+    },
+    {
+      userId: "me",
+      name: "Alex",
+      matchSecondsAtAnchor: 650,
+      anchorTimestamp: now,
+      lastSeen: now,
+      isPaused: false
+    }
+  ],
+  "me",
+  now
+);
+
+eq("sorts fastest first", ranked.map(function (p) { return p.name; }).join(","), "Sara,Alex,Tom");
+eq("leader is fastest", ranked[0].isLeader, true);
+eq("you are marked", ranked[1].isMe, true);
+eq("delta vs leader for you", ranked[1].deltaFromLeader, -5);
+eq("delta vs you for leader", ranked[0].deltaFromMe, 5);
+eq("tom lag vs leader", ranked[2].lagFromLeader, 15);
+eq("spoiler wait is gap to slowest", ranked[0].spoilerWaitSeconds, 15);
+eq("slight bucket at 5s", ranked[1].bucket, "slight");
+eq("slight bucket at 15s", ranked[2].bucket, "slight");
+eq("edge bucket", ranked[0].bucket, "edge");
+eq("16s is delayed", sync.delayBucket(-16), "delayed");
+
+eq("signed format ahead", sync.formatSignedSeconds(12), "+12s");
+eq("signed format behind", sync.formatSignedSeconds(-7), "-7s");
+eq("ntfy topic from room", sync.ntfyTopic("DERBY-7K3Q"), "ssfc_derby-7k3q");
+eq("kv user key", sync.roomKeys("DERBY-7K3Q").user("ab12cd34"), "ssfcU-DERBY-7K3Q-ab12cd34");
+eq("escape html", sync.escapeHtml('<img src=x onerror="alert(1)">'), "&lt;img src=x onerror=&quot;alert(1)&quot;&gt;");
+
+var dropped = sync.decorateParticipants(
+  [
+    {
+      userId: "ghost",
+      name: "Old",
+      matchSecondsAtAnchor: 10,
+      anchorTimestamp: now - sync.STALE_DROP_MS - 1000,
+      lastSeen: now - sync.STALE_DROP_MS - 1000
+    },
+    {
+      userId: "me",
+      name: "Alex",
+      matchSecondsAtAnchor: 10,
+      anchorTimestamp: now,
+      lastSeen: now
+    }
+  ],
+  "me",
+  now
+);
+eq("drops abandoned viewers after 4h", dropped.length, 1);
+
+console.log("\n" + passed + " passed, " + failed + " failed");
+process.exit(failed ? 1 : 0);

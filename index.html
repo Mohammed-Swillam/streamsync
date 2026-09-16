@@ -1,1203 +1,190 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>StreamSync FC - Match Broadcast Delay & Edge Tracker</title>
-  
-  <!-- Tailwind CSS CDN -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  
-  <!-- Google Fonts: Inter & JetBrains Mono for digital clocks -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
-  
-  <script>
-    tailwind.config = {
-      darkMode: 'class',
-      theme: {
-        extend: {
-          fontFamily: {
-            sans: ['Inter', 'sans-serif'],
-            mono: ['JetBrains Mono', 'monospace'],
-          },
-          colors: {
-            pitch: '#080d14',
-            surface: '#111827',
-            surfaceCard: '#182234',
-            surfaceBorder: '#233249',
-            emeraldEdge: '#10b981',
-            spoilerRed: '#ef4444',
-            warningAmber: '#f59e0b',
-          }
-        }
-      }
-    }
-  </script>
-
-  <style>
-    body {
-      background-color: #080d14;
-      color: #f1f5f9;
-      font-family: 'Inter', sans-serif;
-      -webkit-tap-highlight-color: transparent;
-    }
-
-    .digital-lcd {
-      font-family: 'JetBrains Mono', monospace;
-      font-feature-settings: "tnum";
-      font-variant-numeric: tabular-nums;
-      text-shadow: 0 0 16px rgba(16, 185, 129, 0.45);
-    }
-
-    .digital-lcd-delayed {
-      font-family: 'JetBrains Mono', monospace;
-      font-feature-settings: "tnum";
-      font-variant-numeric: tabular-nums;
-      text-shadow: 0 0 16px rgba(245, 158, 11, 0.45);
-    }
-
-    .digital-lcd-danger {
-      font-family: 'JetBrains Mono', monospace;
-      font-feature-settings: "tnum";
-      font-variant-numeric: tabular-nums;
-      text-shadow: 0 0 16px rgba(239, 68, 68, 0.45);
-    }
-
-    @keyframes radarPulse {
-      0% { transform: scale(0.95); opacity: 0.8; }
-      50% { transform: scale(1.05); opacity: 0.3; }
-      100% { transform: scale(0.95); opacity: 0.8; }
-    }
-
-    .animate-radar {
-      animation: radarPulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-    }
-
-    /* Custom scrollbar */
-    ::-webkit-scrollbar {
-      width: 6px;
-      height: 6px;
-    }
-    ::-webkit-scrollbar-track {
-      background: #0d1522;
-    }
-    ::-webkit-scrollbar-thumb {
-      background: #233249;
-      border-radius: 9999px;
-    }
-    ::-webkit-scrollbar-thumb:hover {
-      background: #334b6e;
-    }
-  </style>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Compare live football broadcast delay with friends in other countries.">
+  <title>StreamSync — broadcast delay meter</title>
+  <link rel="stylesheet" href="styles.css">
 </head>
-<body class="min-h-screen flex flex-col antialiased selection:bg-emerald-500/30 selection:text-emerald-300">
-
-  <header class="sticky top-0 z-40 bg-pitch/90 backdrop-blur-md border-b border-surfaceBorder px-4 py-3">
-    <div class="max-w-6xl mx-auto flex items-center justify-between gap-2">
-      <div class="flex items-center space-x-3">
-        <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-700 flex items-center justify-center shadow-lg shadow-emerald-500/20 text-white font-black text-lg">
-          ⚽
-        </div>
+<body>
+  <header>
+    <div class="wrap header-inner">
+      <div class="brand">
+        <div class="mark" aria-hidden="true">SS</div>
         <div>
-          <div class="flex items-center gap-2">
-            <h1 class="font-bold text-base md:text-lg tracking-tight text-white flex items-center gap-1.5">
-              StreamSync <span class="text-xs px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-mono border border-emerald-500/30">FC</span>
-            </h1>
-            <span id="syncPulseDot" class="w-2 h-2 rounded-full bg-emerald-500 animate-ping inline-block"></span>
-          </div>
-          <p class="text-[11px] text-slate-400">Live TV Broadcast Lag & Edge Meter</p>
+          <h1>StreamSync</h1>
+          <p>Broadcast delay meter for football nights</p>
         </div>
       </div>
-
-      <div class="flex items-center gap-2">
-        <button id="soundToggleBtn" class="p-2 rounded-xl bg-surfaceCard border border-surfaceBorder hover:border-slate-600 text-slate-300 transition-colors text-xs flex items-center gap-1.5" title="Toggle audio cues">
-          <span id="soundIcon">🔊</span>
-        </button>
-
-        <div id="roomBadgeContainer" class="hidden items-center gap-1.5 bg-surfaceCard border border-surfaceBorder rounded-xl px-2.5 py-1.5">
-          <span class="text-[11px] text-slate-400">Room:</span>
-          <span id="currentRoomCodeLabel" class="font-mono text-xs font-bold text-emerald-400">...</span>
-          <button id="copyInviteBtn" class="ml-1 text-slate-400 hover:text-white p-1 transition" title="Copy Invite Link">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
-          </button>
+      <div class="header-actions">
+        <div id="syncStatus" class="status-chip" data-state="offline">Offline</div>
+        <div id="roomChip" class="room-chip">
+          <span>Room</span>
+          <strong id="roomCodeLabel" class="mono">—</strong>
+          <button id="copyInviteBtn" class="ghost" type="button">Copy link</button>
         </div>
-
-        <button id="changeRoomBtn" class="hidden text-xs bg-surfaceBorder hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-xl transition font-medium">
-          Exit Room
-        </button>
+        <button id="soundToggleBtn" class="ghost" type="button" aria-pressed="false">Sound off</button>
+        <button id="exitRoomBtn" class="ghost hidden" type="button">Exit</button>
       </div>
     </div>
   </header>
 
-  <main class="flex-1 max-w-6xl w-full mx-auto p-4 md:p-6 space-y-6">
-
-    <!-- VIEW 1: JOIN / CREATE ROOM VIEW (Shown when no room or name is set) -->
-    <div id="welcomeView" class="max-w-lg mx-auto py-6 md:py-12 space-y-6">
-      <div class="text-center space-y-2">
-        <div class="inline-flex items-center justify-center p-3 bg-emerald-500/10 rounded-2xl border border-emerald-500/20 mb-2">
-          <svg class="w-8 h-8 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-        </div>
-        <h2 class="text-2xl md:text-3xl font-extrabold text-white tracking-tight">Sync Feeds. Stop Spoilers.</h2>
-        <p class="text-sm text-slate-400 leading-relaxed max-w-md mx-auto">
-          Watching a match while chatting with friends on different TV or streaming channels? Know exactly who has the broadcast edge so nobody spoils a goal before you see it.
+  <main class="wrap">
+    <section id="welcomeView">
+      <div class="hero-copy">
+        <h2>Stop spoiling goals across delayed feeds.</h2>
+        <p>
+          You and your friends enter the match clock on your own TV. The page keeps ticking,
+          then ranks everyone from the live edge down to the most delayed broadcast.
         </p>
       </div>
 
-      <div class="bg-surfaceCard border border-surfaceBorder rounded-2xl p-6 shadow-2xl backdrop-blur-xl space-y-5">
-        <div class="space-y-4">
+      <form id="joinForm" class="panel form-panel">
+        <label for="joinUserNameInput">Your name</label>
+        <input id="joinUserNameInput" name="name" type="text" maxlength="20" autocomplete="nickname" placeholder="e.g. Alex, living room">
+
+        <label for="joinRoomCodeInput">Room code</label>
+        <div class="row">
+          <input id="joinRoomCodeInput" name="room" type="text" maxlength="24" autocapitalize="characters" placeholder="KICK-7H3Q" style="flex:1">
+          <button id="generateRandomRoomBtn" type="button">Random</button>
+        </div>
+        <p class="hint">Share the room link after you join. Use a random code unless you already have one.</p>
+
+        <label>Match clock on your screen right now</label>
+        <div class="clock-grid">
           <div>
-            <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Your Name or Nickname</label>
-            <input type="text" id="joinUserNameInput" placeholder="e.g., Alex, Dave (Living Room)" maxlength="24"
-              class="w-full px-4 py-3 rounded-xl bg-pitch border border-surfaceBorder focus:border-emerald-500 focus:outline-none text-white placeholder-slate-500 text-sm font-medium transition">
-          </div>
-
-          <div>
-            <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Room ID or Match Code</label>
-            <div class="relative">
-              <input type="text" id="joinRoomCodeInput" placeholder="e.g., el-clasico-24 or premier-match" maxlength="32"
-                class="w-full px-4 py-3 rounded-xl bg-pitch border border-surfaceBorder focus:border-emerald-500 focus:outline-none text-white font-mono placeholder-slate-500 text-sm tracking-wider uppercase transition">
-              <button id="generateRandomRoomBtn" type="button" class="absolute right-2 top-2 text-[11px] bg-surfaceBorder hover:bg-slate-700 text-slate-300 px-2.5 py-1.5 rounded-lg transition font-mono">
-                🎲 Random
-              </button>
-            </div>
-          </div>
-
-          <div class="border-t border-surfaceBorder/60 pt-4 space-y-3">
-            <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
-              Current Match Clock on your TV
-            </label>
-            <div class="grid grid-cols-2 gap-3">
-              <div>
-                <div class="text-[11px] text-slate-400 mb-1">Minutes</div>
-                <input type="number" id="initialMinInput" min="0" max="130" value="00"
-                  class="w-full px-4 py-3 rounded-xl bg-pitch border border-surfaceBorder focus:border-emerald-500 focus:outline-none text-white font-mono text-center text-lg font-bold">
-              </div>
-              <div>
-                <div class="text-[11px] text-slate-400 mb-1">Seconds</div>
-                <input type="number" id="initialSecInput" min="0" max="59" value="00"
-                  class="w-full px-4 py-3 rounded-xl bg-pitch border border-surfaceBorder focus:border-emerald-500 focus:outline-none text-white font-mono text-center text-lg font-bold">
-              </div>
-            </div>
-            <p class="text-[11px] text-slate-500 italic">Look at your TV screen timer right now and punch it in. You can fine-tune this anytime!</p>
-          </div>
-        </div>
-
-        <button id="startSyncBtn" class="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-pitch font-bold text-sm tracking-wide shadow-lg shadow-emerald-500/20 active:scale-[0.99] transition flex items-center justify-center gap-2">
-          <span>Enter Live Sync Room</span>
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
-        </button>
-      </div>
-
-      <!-- Quick match hints -->
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-center">
-        <div class="p-3 bg-surfaceCard/40 border border-surfaceBorder/40 rounded-xl">
-          <div class="text-xs font-semibold text-emerald-400">⚡ Live Anchor Sync</div>
-          <div class="text-[11px] text-slate-400 mt-0.5">Clocks tick continuously without spamming your network.</div>
-        </div>
-        <div class="p-3 bg-surfaceCard/40 border border-surfaceBorder/40 rounded-xl">
-          <div class="text-xs font-semibold text-amber-400">🚨 Spoiler Shield</div>
-          <div class="text-[11px] text-slate-400 mt-0.5">Leaders get a cooldown meter before posting in group chats.</div>
-        </div>
-        <div class="p-3 bg-surfaceCard/40 border border-surfaceBorder/40 rounded-xl">
-          <div class="text-xs font-semibold text-teal-400">🎯 Whistle Calibrator</div>
-          <div class="text-[11px] text-slate-400 mt-0.5">One-tap ±1s or ±5s nudge when referee blows the whistle.</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- VIEW 2: ACTIVE ROOM DASHBOARD VIEW -->
-    <div id="dashboardView" class="hidden space-y-6">
-
-      <!-- SPOILER / LIVE EDGE DYNAMIC BANNER -->
-      <div id="roleAlertBanner" class="p-4 md:p-5 rounded-2xl border transition-all duration-300 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-xl">
-        <div class="flex items-start space-x-3.5">
-          <div id="roleAlertIcon" class="w-10 h-10 rounded-xl flex items-center justify-center text-xl shrink-0">
-            🚨
+            <label for="initialMinInput">Minutes</label>
+            <input id="initialMinInput" type="number" min="0" max="199" value="0" inputmode="numeric">
           </div>
           <div>
-            <div class="flex items-center gap-2">
-              <span id="roleAlertTitle" class="text-sm md:text-base font-extrabold tracking-tight text-white uppercase">Calculating Feed Edge...</span>
-              <span id="roleAlertTag" class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full uppercase">SYNCING</span>
-            </div>
-            <p id="roleAlertDescription" class="text-xs md:text-sm text-slate-300 mt-0.5">
-              Evaluating feed latency across all active viewers...
-            </p>
+            <label for="initialSecInput">Seconds</label>
+            <input id="initialSecInput" type="number" min="0" max="59" value="0" inputmode="numeric">
           </div>
         </div>
+        <p class="hint">Look at the TV timer and type it in. You can nudge it after you join.</p>
 
-        <!-- Chat Caution Meter (for edge leaders) -->
-        <div id="chatCautionBox" class="hidden w-full md:w-auto shrink-0 bg-pitch/70 border border-white/10 rounded-xl p-3 text-center md:text-right">
-          <div class="text-[11px] uppercase tracking-wider text-slate-400 font-semibold">Group Chat Caution</div>
-          <div class="flex items-center justify-center md:justify-end gap-1.5 mt-0.5">
-            <span class="text-xs text-amber-300">Wait at least:</span>
-            <span id="cautionDelayCountdown" class="text-lg font-mono font-black text-amber-400">0s</span>
-          </div>
-          <p class="text-[10px] text-slate-500">before texting match reactions!</p>
+        <button id="startSyncBtn" class="primary" type="submit">Enter room</button>
+      </form>
+    </section>
+
+    <section id="dashboardView" class="hidden">
+      <div id="roleBanner" class="banner" data-role="solo">
+        <div>
+          <h3>
+            <span id="roleTitle">Waiting for friends</span>
+            <span id="roleTag" class="tag">SOLO</span>
+          </h3>
+          <p id="roleText">Share the room link so friends can punch in their own TV clocks.</p>
         </div>
-      </div>
-
-      <!-- MAIN CONTROL GRID: USER'S LIVE CLOCK & CONTROLS -->
-      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-
-        <!-- Left Column: My Clock & Nudge Controls (7 cols) -->
-        <div class="lg:col-span-7 space-y-5">
-          <div class="bg-surfaceCard border border-surfaceBorder rounded-2xl p-5 md:p-6 shadow-xl relative overflow-hidden">
-            <!-- Subtle pitch markings in background -->
-            <div class="absolute -right-8 -bottom-8 w-40 h-40 rounded-full border border-surfaceBorder/40 pointer-events-none"></div>
-
-            <div class="flex items-center justify-between pb-3 border-b border-surfaceBorder">
-              <div>
-                <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Your Broadcast Feed</span>
-                <h3 id="myDisplayNameLabel" class="text-lg font-bold text-white flex items-center gap-2">
-                  <span>Player</span>
-                  <span class="text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full font-mono">YOU</span>
-                </h3>
-              </div>
-              <div class="text-right">
-                <span id="clockStatusBadge" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                  <span>FEED TICKING</span>
-                </span>
-              </div>
-            </div>
-
-            <!-- DIGITAL MATCH TIME DISPLAY -->
-            <div class="my-6 text-center py-4 bg-pitch/80 rounded-2xl border border-surfaceBorder relative">
-              <div class="text-[11px] font-mono text-slate-500 uppercase tracking-widest mb-1">CURRENT MATCH TIME</div>
-              <div id="myCurrentMatchTimeDisplay" class="digital-lcd text-5xl md:text-7xl font-bold text-emerald-400 tracking-wider select-none">
-                00:00
-              </div>
-              <div id="relativeEdgeSubtext" class="text-xs font-mono font-medium text-slate-400 mt-2">
-                Pacesetter: In sync
-              </div>
-            </div>
-
-            <!-- ONE-CLICK FAST NUDGE BUTTONS -->
-            <div class="space-y-2">
-              <div class="flex items-center justify-between">
-                <label class="text-xs font-semibold text-slate-300 uppercase tracking-wider">
-                  Quick Calibrate (Whistle / Goal Nudge)
-                </label>
-                <span class="text-[11px] text-slate-500">Instant anchor update</span>
-              </div>
-              
-              <div class="grid grid-cols-6 gap-2">
-                <button data-nudge="-15" class="nudgeBtn py-2.5 rounded-xl bg-pitch hover:bg-slate-800 active:scale-95 border border-surfaceBorder text-slate-200 font-mono text-xs font-bold transition">
-                  -15s
-                </button>
-                <button data-nudge="-5" class="nudgeBtn py-2.5 rounded-xl bg-pitch hover:bg-slate-800 active:scale-95 border border-surfaceBorder text-slate-200 font-mono text-xs font-bold transition">
-                  -5s
-                </button>
-                <button data-nudge="-1" class="nudgeBtn py-2.5 rounded-xl bg-pitch hover:bg-slate-800 active:scale-95 border border-surfaceBorder text-emerald-300 font-mono text-xs font-bold transition">
-                  -1s
-                </button>
-                <button data-nudge="1" class="nudgeBtn py-2.5 rounded-xl bg-pitch hover:bg-slate-800 active:scale-95 border border-surfaceBorder text-emerald-300 font-mono text-xs font-bold transition">
-                  +1s
-                </button>
-                <button data-nudge="5" class="nudgeBtn py-2.5 rounded-xl bg-pitch hover:bg-slate-800 active:scale-95 border border-surfaceBorder text-slate-200 font-mono text-xs font-bold transition">
-                  +5s
-                </button>
-                <button data-nudge="15" class="nudgeBtn py-2.5 rounded-xl bg-pitch hover:bg-slate-800 active:scale-95 border border-surfaceBorder text-slate-200 font-mono text-xs font-bold transition">
-                  +15s
-                </button>
-              </div>
-            </div>
-
-            <!-- IN-GAME MATCH TIMELINE PRESETS & ACTIONS -->
-            <div class="mt-5 pt-4 border-t border-surfaceBorder/70 flex flex-wrap items-center justify-between gap-3">
-              <div class="flex items-center gap-2">
-                <button id="togglePauseBtn" class="px-3.5 py-2 rounded-xl bg-pitch border border-surfaceBorder hover:border-amber-500/50 text-slate-200 text-xs font-semibold transition flex items-center gap-1.5">
-                  <span id="pauseBtnIcon">⏸️</span>
-                  <span id="pauseBtnLabel">Pause Clock (Halftime)</span>
-                </button>
-                <button id="openExactTimeModalBtn" class="px-3.5 py-2 rounded-xl bg-pitch border border-surfaceBorder hover:border-emerald-500/50 text-slate-200 text-xs font-semibold transition flex items-center gap-1.5">
-                  ✏️ Set Exact Time
-                </button>
-              </div>
-
-              <!-- Quick Presets -->
-              <div class="flex items-center gap-1.5 overflow-x-auto py-1">
-                <button data-preset="0" class="presetBtn px-2.5 py-1.5 rounded-lg bg-surfaceBorder/60 hover:bg-surfaceBorder text-[11px] font-mono text-slate-300">
-                  00:00 (KO)
-                </button>
-                <button data-preset="2700" class="presetBtn px-2.5 py-1.5 rounded-lg bg-surfaceBorder/60 hover:bg-surfaceBorder text-[11px] font-mono text-slate-300">
-                  45:00 (HT)
-                </button>
-                <button data-preset="5400" class="presetBtn px-2.5 py-1.5 rounded-lg bg-surfaceBorder/60 hover:bg-surfaceBorder text-[11px] font-mono text-slate-300">
-                  90:00 (FT)
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <!-- BROADCAST SYNC TIP CARD -->
-          <div class="p-4 rounded-2xl bg-surfaceCard/50 border border-surfaceBorder/60 text-xs text-slate-400 space-y-2">
-            <div class="flex items-center gap-2 font-semibold text-slate-300">
-              <span>💡 Pro Tip for Perfect Synchronization:</span>
-            </div>
-            <p>
-              When a referee blows for a foul, corner kick, or goal kick, wait for your TV clock to hit a round 10-second mark (e.g. 24:30), then tap <strong>Set Exact Time</strong> or use the <strong>±1s / ±5s</strong> buttons to calibrate with your friends instantly!
-            </p>
-          </div>
-        </div>
-
-        <!-- Right Column: Live Group Leaderboard (5 cols) -->
-        <div class="lg:col-span-5 space-y-4">
-          <div class="bg-surfaceCard border border-surfaceBorder rounded-2xl p-5 shadow-xl flex flex-col h-full">
-            <div class="flex items-center justify-between pb-3 border-b border-surfaceBorder">
-              <div class="flex items-center gap-2">
-                <h3 class="text-sm font-bold uppercase tracking-wider text-slate-200">
-                  Group Feed Leaderboard
-                </h3>
-                <span id="participantCountBadge" class="text-xs px-2 py-0.5 rounded-full bg-surfaceBorder text-slate-300 font-mono">
-                  1 viewer
-                </span>
-              </div>
-
-              <button id="inviteFriendsBtn" class="text-xs text-emerald-400 hover:text-emerald-300 font-semibold flex items-center gap-1">
-                <span>+ Invite</span>
-              </button>
-            </div>
-
-            <!-- Feed Delay Explanation Header -->
-            <div class="text-[11px] text-slate-400 my-3 flex items-center justify-between px-1">
-              <span>Viewer & Feed</span>
-              <span>Delay vs Fastest</span>
-            </div>
-
-            <!-- Real-time dynamic participant list -->
-            <div id="participantListContainer" class="space-y-2.5 flex-1 min-h-[260px] overflow-y-auto pr-1">
-              <!-- Rendered dynamically -->
-            </div>
-
-            <!-- Legend -->
-            <div class="mt-4 pt-3 border-t border-surfaceBorder flex items-center justify-between text-[10px] text-slate-400 font-mono">
-              <div class="flex items-center gap-1">
-                <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
-                <span>Live Edge</span>
-              </div>
-              <div class="flex items-center gap-1">
-                <span class="w-2 h-2 rounded-full bg-amber-500"></span>
-                <span>1-15s Lag</span>
-              </div>
-              <div class="flex items-center gap-1">
-                <span class="w-2 h-2 rounded-full bg-rose-500"></span>
-                <span>16s+ Delayed</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-      </div>
-
-      <!-- BROADCAST LATENCY INSIGHTS -->
-      <div class="bg-surfaceCard border border-surfaceBorder rounded-2xl p-5 space-y-3">
-        <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400">Why are our streams delayed?</h4>
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
-          <div class="p-3 bg-pitch/60 rounded-xl border border-surfaceBorder">
-            <div class="font-bold text-emerald-400">📡 Terrestrial / Cable</div>
-            <div class="text-slate-400 text-[11px] mt-1">Direct antenna & traditional cable have the lowest latency (~3 to 7s real delay).</div>
-          </div>
-          <div class="p-3 bg-pitch/60 rounded-xl border border-surfaceBorder">
-            <div class="font-bold text-teal-400">🛰️ Satellite TV</div>
-            <div class="text-slate-400 text-[11px] mt-1">Signal bounces to orbit and back, introducing roughly 5-10s of broadcast delay.</div>
-          </div>
-          <div class="p-3 bg-pitch/60 rounded-xl border border-surfaceBorder">
-            <div class="font-bold text-amber-400">📱 Official OTT Apps</div>
-            <div class="text-slate-400 text-[11px] mt-1">HLS / DASH video chunking causes 20-40s delay compared to physical TV.</div>
-          </div>
-          <div class="p-3 bg-pitch/60 rounded-xl border border-surfaceBorder">
-            <div class="font-bold text-rose-400">🌐 Unofficial Streams</div>
-            <div class="text-slate-400 text-[11px] mt-1">Re-encoded web streams typically lag behind by 45s to 90s+. Highest spoiler risk!</div>
-          </div>
+        <div id="cautionBox" class="caution hidden">
+          <span>Wait at least</span>
+          <strong id="cautionValue">0s</strong>
+          <span>before reacting in chat</span>
         </div>
       </div>
 
-    </div>
+      <div class="layout">
+        <section class="clock-card">
+          <p class="kicker">Your broadcast</p>
+          <h2 id="myNameLabel">You</h2>
+          <div class="clock-readout">
+            <div id="myClock" class="time mono">00:00</div>
+            <div id="clockStatus" class="kicker">Feed ticking</div>
+            <div id="myRelative" class="relative">Waiting for the group</div>
+          </div>
 
+          <label>Quick calibrate</label>
+          <div class="nudge-grid">
+            <button type="button" class="nudgeBtn" data-nudge="-15">-15s</button>
+            <button type="button" class="nudgeBtn" data-nudge="-5">-5s</button>
+            <button type="button" class="nudgeBtn" data-nudge="-1">-1s</button>
+            <button type="button" class="nudgeBtn" data-nudge="1">+1s</button>
+            <button type="button" class="nudgeBtn" data-nudge="5">+5s</button>
+            <button type="button" class="nudgeBtn" data-nudge="15">+15s</button>
+          </div>
+
+          <div class="toolbar">
+            <button id="pauseBtn" type="button">Pause (halftime)</button>
+            <button id="openExactBtn" type="button">Set exact time</button>
+            <button class="presetBtn" type="button" data-preset="0">00:00 KO</button>
+            <button class="presetBtn" type="button" data-preset="2700">45:00 HT</button>
+            <button class="presetBtn" type="button" data-preset="5400">90:00 FT</button>
+          </div>
+        </section>
+
+        <aside class="board-card">
+          <div class="board-head">
+            <div>
+              <p class="kicker">Group feeds</p>
+              <h2>Leaderboard</h2>
+            </div>
+            <div>
+              <span id="participantCount">1 viewer</span>
+              <button id="inviteFriendsBtn" type="button">Invite</button>
+            </div>
+          </div>
+          <div class="legend">
+            <span>Sorted live edge → longest delay</span>
+            <span>vs fastest / vs you</span>
+          </div>
+          <div id="participantList"></div>
+        </aside>
+      </div>
+
+      <div class="tips">
+        When a whistle, replay graphic, or round clock mark hits (24:30, 67:00), tap
+        <strong>Set exact time</strong> or nudge ±1s. The shared room only stores each person's
+        last reported match time, not a live video stream.
+      </div>
+    </section>
   </main>
 
-  <!-- MODAL: SET EXACT TIME -->
-  <div id="exactTimeModal" class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm hidden items-center justify-center p-4">
-    <div class="bg-surfaceCard border border-surfaceBorder w-full max-w-sm rounded-2xl p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in-95 duration-150">
-      <div class="flex items-center justify-between border-b border-surfaceBorder pb-3">
-        <h3 class="font-bold text-white text-base">Set Exact Match Clock</h3>
-        <button id="closeExactModalBtn" class="text-slate-400 hover:text-white p-1">✕</button>
-      </div>
+  <footer>
+    Static page. No accounts. Host on GitHub Pages or any folder on the web.
+  </footer>
 
-      <div class="space-y-3">
-        <p class="text-xs text-slate-400">
-          Enter the current minute and second showing on your screen right now:
-        </p>
-        <div class="grid grid-cols-2 gap-3">
-          <div>
-            <label class="block text-[11px] font-semibold text-slate-400 mb-1">Minutes</label>
-            <input type="number" id="exactMinInput" min="0" max="130" value="0"
-              class="w-full px-4 py-3 rounded-xl bg-pitch border border-surfaceBorder focus:border-emerald-500 focus:outline-none text-white font-mono text-center text-xl font-bold">
-          </div>
-          <div>
-            <label class="block text-[11px] font-semibold text-slate-400 mb-1">Seconds</label>
-            <input type="number" id="exactSecInput" min="0" max="59" value="0"
-              class="w-full px-4 py-3 rounded-xl bg-pitch border border-surfaceBorder focus:border-emerald-500 focus:outline-none text-white font-mono text-center text-xl font-bold">
-          </div>
+  <div id="exactModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="exactTitle">
+    <div class="modal-card">
+      <h3 id="exactTitle">Set exact match clock</h3>
+      <p class="hint">Type the minutes and seconds currently on your screen.</p>
+      <div class="clock-grid">
+        <div>
+          <label for="exactMinInput">Minutes</label>
+          <input id="exactMinInput" type="number" min="0" max="199" value="0">
+        </div>
+        <div>
+          <label for="exactSecInput">Seconds</label>
+          <input id="exactSecInput" type="number" min="0" max="59" value="0">
         </div>
       </div>
-
-      <div class="flex gap-2 pt-2">
-        <button id="saveExactTimeBtn" class="flex-1 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 font-bold text-pitch text-sm transition">
-          Sync Now
-        </button>
-        <button id="cancelExactTimeBtn" class="px-4 py-3 rounded-xl bg-surfaceBorder hover:bg-slate-700 text-slate-200 text-sm font-semibold transition">
-          Cancel
-        </button>
+      <div class="toolbar">
+        <button id="saveExactBtn" class="primary" type="button" style="margin-top:0;width:auto;flex:1">Sync now</button>
+        <button id="cancelExactBtn" type="button">Cancel</button>
       </div>
     </div>
   </div>
 
-  <!-- MODAL: INVITE FRIENDS -->
-  <div id="inviteModal" class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm hidden items-center justify-center p-4">
-    <div class="bg-surfaceCard border border-surfaceBorder w-full max-w-md rounded-2xl p-6 shadow-2xl space-y-5">
-      <div class="flex items-center justify-between border-b border-surfaceBorder pb-3">
-        <h3 class="font-bold text-white text-base">Invite Friends to Sync Feeds</h3>
-        <button id="closeInviteModalBtn" class="text-slate-400 hover:text-white p-1">✕</button>
+  <div id="inviteModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="inviteTitle">
+    <div class="modal-card">
+      <h3 id="inviteTitle">Invite friends</h3>
+      <p class="hint">They open this link, type their name and the clock on their TV, then join the same room.</p>
+      <label for="shareUrlInput">Room link</label>
+      <div class="row">
+        <input id="shareUrlInput" type="text" readonly>
+        <button id="copyShareUrlBtn" type="button">Copy</button>
       </div>
-
-      <div class="space-y-4">
-        <p class="text-xs text-slate-400 leading-relaxed">
-          Send this link to your group chat. When they open it, they'll automatically enter your room and enter their TV match clock.
-        </p>
-
-        <div>
-          <label class="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Room Link</label>
-          <div class="flex items-center gap-2">
-            <input type="text" id="shareUrlInput" readonly
-              class="flex-1 px-3.5 py-2.5 rounded-xl bg-pitch border border-surfaceBorder text-emerald-400 font-mono text-xs focus:outline-none select-all">
-            <button id="copyShareUrlBtn" class="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-pitch font-bold text-xs shrink-0 transition">
-              Copy Link
-            </button>
-          </div>
-        </div>
-
-        <div>
-          <label class="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Or share via WhatsApp / Telegram</label>
-          <button id="shareWhatsAppBtn" class="w-full py-2.5 px-4 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 text-xs font-semibold transition flex items-center justify-center gap-2">
-            <span>💬 Share Match Invite Message</span>
-          </button>
-        </div>
+      <div class="toolbar">
+        <button id="whatsAppBtn" type="button">WhatsApp</button>
+        <button id="telegramBtn" type="button">Telegram</button>
+        <button id="closeInviteBtn" type="button">Close</button>
       </div>
     </div>
   </div>
 
-  <!-- FLOATING TOAST NOTIFICATION CONTAINER -->
-  <div id="toastContainer" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+  <div id="toastRegion" class="toast-region" aria-live="polite"></div>
 
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-    import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-    import { getFirestore, doc, setDoc, deleteDoc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-    // Global application configuration
-    const appId = typeof __app_id !== 'undefined' ? __app_id : 'match-sync-fc';
-    let firebaseConfig = null;
-    try {
-      if (typeof __firebase_config !== 'undefined') {
-        firebaseConfig = JSON.parse(__firebase_config);
-      }
-    } catch (e) {
-      console.warn("Could not parse __firebase_config", e);
-    }
-
-    // Audio synthesizer for subtle tactile feedback
-    let soundEnabled = true;
-    let audioCtx = null;
-
-    function playTone(freq = 440, type = 'sine', duration = 0.08) {
-      if (!soundEnabled) return;
-      try {
-        if (!audioCtx) {
-          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        }
-        if (audioCtx.state === 'suspended') {
-          audioCtx.resume();
-        }
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.type = type;
-        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-        gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        osc.start();
-        osc.stop(audioCtx.currentTime + duration);
-      } catch (err) {
-        // audio context blocked by gesture policy until interaction
-      }
-    }
-
-    // Toast helper (replaces browser alerts completely)
-    function showToast(message, type = 'info') {
-      const container = document.getElementById('toastContainer');
-      const toast = document.createElement('div');
-      toast.className = `pointer-events-auto px-4 py-2.5 rounded-xl border text-xs font-semibold shadow-xl flex items-center gap-2 transform transition-all duration-200 translate-y-2 opacity-0 ${
-        type === 'success' ? 'bg-emerald-950/90 border-emerald-500 text-emerald-200' :
-        type === 'warning' ? 'bg-amber-950/90 border-amber-500 text-amber-200' :
-        type === 'danger' ? 'bg-rose-950/90 border-rose-500 text-rose-200' :
-        'bg-slate-900/90 border-slate-700 text-slate-200'
-      }`;
-
-      const icon = type === 'success' ? '✅' : type === 'warning' ? '⚠️' : type === 'danger' ? '🚨' : 'ℹ️';
-      toast.innerHTML = `<span>${icon}</span><span>${message}</span>`;
-      container.appendChild(toast);
-
-      requestAnimationFrame(() => {
-        toast.classList.remove('translate-y-2', 'opacity-0');
-      });
-
-      setTimeout(() => {
-        toast.classList.add('opacity-0', 'translate-y-2');
-        setTimeout(() => toast.remove(), 250);
-      }, 3500);
-    }
-
-    let db = null;
-    let auth = null;
-    let currentUserId = null;
-    let currentRoomId = null;
-    let currentUserName = '';
-
-    // Local anchor state for current user
-    let localAnchor = {
-      matchSecondsAtAnchor: 0,
-      anchorTimestamp: Date.now(),
-      isPaused: false,
-    };
-
-    // Cached state of all participants in current room
-    let participantsMap = new Map();
-    let unsubscribeSnapshot = null;
-    let tickInterval = null;
-
-    // Helper: format seconds to MM:SS or 90+2:SS
-    function formatMatchSeconds(totalSeconds) {
-      if (isNaN(totalSeconds) || totalSeconds < 0) totalSeconds = 0;
-      const mins = Math.floor(totalSeconds / 60);
-      const secs = totalSeconds % 60;
-      const mm = String(mins).padStart(2, '0');
-      const ss = String(secs).padStart(2, '0');
-      return `${mm}:${ss}`;
-    }
-
-    // Helper: calculate exact current second for a participant based on their anchor
-    function calculateCurrentSeconds(p) {
-      if (!p) return 0;
-      if (p.isPaused) {
-        return p.matchSecondsAtAnchor || 0;
-      }
-      const now = Date.now();
-      const elapsedSeconds = Math.max(0, Math.floor((now - (p.anchorTimestamp || now)) / 1000));
-      return (p.matchSecondsAtAnchor || 0) + elapsedSeconds;
-    }
-
-    async function initFirebase() {
-      if (!firebaseConfig) {
-        console.warn("No Firebase config detected; fallback simulation mode ready.");
-        setupLocalFallback();
-        return;
-      }
-
-      try {
-        const app = initializeApp(firebaseConfig);
-        db = getFirestore(app);
-        auth = getAuth(app);
-
-        // RULE 3: Authenticate before queries
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          const userCred = await signInWithCustomToken(auth, __initial_auth_token);
-          currentUserId = userCred.user.uid;
-        } else {
-          const userCred = await signInAnonymously(auth);
-          currentUserId = userCred.user.uid;
-        }
-        console.log("Firebase authenticated. User ID:", currentUserId);
-      } catch (err) {
-        console.error("Firebase auth error, engaging fallback mode:", err);
-        setupLocalFallback();
-      }
-    }
-
-    // Fallback broadcast simulation (works offline or when running in standalone browsers)
-    let fallbackBc = null;
-    function setupLocalFallback() {
-      currentUserId = 'user_' + Math.random().toString(36).substring(2, 9);
-      try {
-        fallbackBc = new BroadcastChannel('stream_sync_fc_channel');
-        fallbackBc.onmessage = (event) => {
-          if (event.data && event.data.type === 'SYNC_UPDATE' && event.data.roomId === currentRoomId) {
-            handleParticipantUpdate(event.data.payload);
-          }
-        };
-      } catch (e) {
-        console.log("BroadcastChannel unavailable; single tab simulation active.");
-      }
-    }
-
-    // RULE 1: STRICT PATH: /artifacts/{appId}/public/data/match_streams
-    // RULE 2: No complex queries. Simple collection query, filtered in-memory.
-    function listenToRoom(roomId) {
-      if (unsubscribeSnapshot) {
-        unsubscribeSnapshot();
-        unsubscribeSnapshot = null;
-      }
-      participantsMap.clear();
-
-      if (!db || !currentUserId) {
-        // Local participant in fallback mode
-        participantsMap.set(currentUserId, {
-          userId: currentUserId,
-          roomId: roomId,
-          name: currentUserName,
-          ...localAnchor,
-          updatedAt: Date.now()
-        });
-        return;
-      }
-
-      try {
-        const matchCol = collection(db, 'artifacts', appId, 'public', 'data', 'match_streams');
-        unsubscribeSnapshot = onSnapshot(matchCol, (snapshot) => {
-          const activeThreshold = Date.now() - (1000 * 60 * 180); // within last 3 hours
-          
-          snapshot.docs.forEach((docSnap) => {
-            const data = docSnap.data();
-            // Filter by room in memory (RULE 2)
-            if (data && data.roomId === roomId) {
-              participantsMap.set(data.userId, data);
-            }
-          });
-
-          // Also check for deletions
-          snapshot.docChanges().forEach((change) => {
-            if (change.type === 'removed') {
-              const data = change.doc.data();
-              if (data && data.userId) {
-                participantsMap.delete(data.userId);
-              }
-            }
-          });
-
-          updateDashboardUI();
-        }, (error) => {
-          console.error("Firestore onSnapshot error:", error);
-          showToast("Sync connection hiccup. Reconnecting...", "warning");
-        });
-      } catch (err) {
-        console.error("Failed to attach listener:", err);
-      }
-    }
-
-    // Push local anchor update to Firestore or Fallback
-    async function broadcastMyAnchor() {
-      const payload = {
-        userId: currentUserId,
-        roomId: currentRoomId,
-        name: currentUserName,
-        matchSecondsAtAnchor: localAnchor.matchSecondsAtAnchor,
-        anchorTimestamp: localAnchor.anchorTimestamp,
-        isPaused: localAnchor.isPaused,
-        updatedAt: Date.now()
-      };
-
-      // Always update local map optimistically
-      participantsMap.set(currentUserId, payload);
-      updateDashboardUI();
-
-      if (fallbackBc) {
-        fallbackBc.postMessage({
-          type: 'SYNC_UPDATE',
-          roomId: currentRoomId,
-          payload: payload
-        });
-      }
-
-      if (db && currentUserId) {
-        try {
-          // Document ID: `${roomId}_${userId}`
-          const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'match_streams', `${currentRoomId}_${currentUserId}`);
-          await setDoc(docRef, payload);
-        } catch (err) {
-          console.error("Error saving match anchor:", err);
-        }
-      }
-    }
-
-    function handleParticipantUpdate(payload) {
-      if (!payload || payload.roomId !== currentRoomId) return;
-      participantsMap.set(payload.userId, payload);
-      updateDashboardUI();
-    }
-
-    function startLiveTicker() {
-      if (tickInterval) clearInterval(tickInterval);
-
-      // Runs every 1 second locally without hitting the database!
-      tickInterval = setInterval(() => {
-        updateDashboardUI();
-      }, 1000);
-    }
-
-    function updateDashboardUI() {
-      if (!currentRoomId) return;
-
-      // 1. Calculate current seconds for self
-      const mySeconds = calculateCurrentSeconds({
-        ...localAnchor,
-        name: currentUserName
-      });
-
-      // Update primary user clock display
-      const myClockEl = document.getElementById('myCurrentMatchTimeDisplay');
-      if (myClockEl) {
-        myClockEl.textContent = formatMatchSeconds(mySeconds);
-      }
-
-      // Update pause badge
-      const pauseLabel = document.getElementById('pauseBtnLabel');
-      const pauseIcon = document.getElementById('pauseBtnIcon');
-      const clockBadge = document.getElementById('clockStatusBadge');
-      if (localAnchor.isPaused) {
-        if (pauseLabel) pauseLabel.textContent = "Resume Clock (2nd Half)";
-        if (pauseIcon) pauseIcon.textContent = "▶️";
-        if (clockBadge) {
-          clockBadge.className = "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20";
-          clockBadge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span><span>PAUSED (HALFTIME)</span>`;
-        }
-      } else {
-        if (pauseLabel) pauseLabel.textContent = "Pause Clock (Halftime)";
-        if (pauseIcon) pauseIcon.textContent = "⏸️";
-        if (clockBadge) {
-          clockBadge.className = "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20";
-          clockBadge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span><span>FEED TICKING</span>`;
-        }
-      }
-
-      // 2. Evaluate all participants
-      const participantsList = Array.from(participantsMap.values()).map(p => {
-        const sec = calculateCurrentSeconds(p);
-        return {
-          ...p,
-          calculatedSeconds: sec,
-          isMe: p.userId === currentUserId
-        };
-      });
-
-      // Sort descending: highest match time (live-edge leader) first
-      participantsList.sort((a, b) => b.calculatedSeconds - a.calculatedSeconds);
-
-      const countBadge = document.getElementById('participantCountBadge');
-      if (countBadge) {
-        countBadge.textContent = `${participantsList.length} ${participantsList.length === 1 ? 'viewer' : 'viewers'}`;
-      }
-
-      // Identify the live-edge leader (max seconds)
-      const leader = participantsList.length > 0 ? participantsList[0] : null;
-      const maxSeconds = leader ? leader.calculatedSeconds : mySeconds;
-      const myDeltaFromLeader = mySeconds - maxSeconds; // 0 or negative
-
-      // Identify next person behind leader to calculate chat caution buffer
-      let secondLeader = null;
-      if (participantsList.length > 1) {
-        secondLeader = participantsList[1];
-      }
-
-      // 3. Update Banner & Chat Caution Alert
-      const banner = document.getElementById('roleAlertBanner');
-      const alertIcon = document.getElementById('roleAlertIcon');
-      const alertTitle = document.getElementById('roleAlertTitle');
-      const alertTag = document.getElementById('roleAlertTag');
-      const alertDesc = document.getElementById('roleAlertDescription');
-      const cautionBox = document.getElementById('chatCautionBox');
-      const cautionCountdown = document.getElementById('cautionDelayCountdown');
-      const relativeSubtext = document.getElementById('relativeEdgeSubtext');
-
-      const isLeader = (leader && leader.userId === currentUserId);
-      const isSolo = participantsList.length <= 1;
-
-      if (isSolo) {
-        // Only one person in room
-        banner.className = "p-4 md:p-5 rounded-2xl border transition-all duration-300 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-xl bg-surfaceCard border-surfaceBorder";
-        alertIcon.className = "w-10 h-10 rounded-xl bg-surfaceBorder flex items-center justify-center text-xl shrink-0";
-        alertIcon.textContent = "⏱️";
-        alertTitle.textContent = "Room Ready - Waiting for Friends";
-        alertTag.className = "text-[10px] font-mono font-bold px-2 py-0.5 rounded-full uppercase bg-slate-800 text-slate-300 border border-slate-700";
-        alertTag.textContent = "SOLO";
-        alertDesc.textContent = "Tap '+ Invite' or share the link so friends can enter their TV clocks to track stream lag.";
-        cautionBox.classList.add('hidden');
-        if (relativeSubtext) relativeSubtext.textContent = "Waiting for group members to join...";
-      } else if (isLeader) {
-        // USER IS FURTHEST AHEAD (SPOILER RISK!)
-        const gapToNext = secondLeader ? (maxSeconds - secondLeader.calculatedSeconds) : 0;
-        
-        banner.className = "p-4 md:p-5 rounded-2xl border transition-all duration-300 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-xl bg-rose-950/40 border-rose-500/50";
-        alertIcon.className = "w-10 h-10 rounded-xl bg-rose-500/20 text-rose-400 border border-rose-500/30 flex items-center justify-center text-xl shrink-0 animate-bounce";
-        alertIcon.textContent = "🚨";
-        alertTitle.textContent = "You Have the Live Edge! (Spoiler Alert)";
-        alertTag.className = "text-[10px] font-mono font-bold px-2 py-0.5 rounded-full uppercase bg-rose-500/20 text-rose-300 border border-rose-500/40";
-        alertTag.textContent = "PACESETTER";
-        alertDesc.textContent = `You are streaming faster than everyone! You are ${gapToNext}s ahead of ${secondLeader ? secondLeader.name : 'the group'}. Hold your chat reactions!`;
-
-        if (gapToNext > 0) {
-          cautionBox.classList.remove('hidden');
-          cautionCountdown.textContent = `${gapToNext}s`;
-        } else {
-          cautionBox.classList.add('hidden');
-        }
-
-        if (relativeSubtext) {
-          relativeSubtext.innerHTML = `<span class="text-rose-400 font-bold">⚡ Ahead of everyone by +${gapToNext}s</span>`;
-        }
-      } else {
-        // USER IS DELAYED
-        const lagSeconds = Math.abs(myDeltaFromLeader);
-        const isSevere = lagSeconds > 25;
-        
-        banner.className = `p-4 md:p-5 rounded-2xl border transition-all duration-300 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-xl ${
-          isSevere ? 'bg-amber-950/30 border-amber-500/40' : 'bg-slate-900/60 border-surfaceBorder'
-        }`;
-        alertIcon.className = `w-10 h-10 rounded-xl flex items-center justify-center text-xl shrink-0 ${
-          isSevere ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'bg-surfaceBorder text-slate-300'
-        }`;
-        alertIcon.textContent = isSevere ? "🛡️" : "⏱️";
-        alertTitle.textContent = `Your Feed is Delayed by -${lagSeconds}s`;
-        alertTag.className = `text-[10px] font-mono font-bold px-2 py-0.5 rounded-full uppercase ${
-          isSevere ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' : 'bg-surfaceBorder text-slate-300'
-        }`;
-        alertTag.textContent = isSevere ? "HIGH SPOILER RISK" : "BEHIND LEADER";
-        alertDesc.textContent = `${leader ? leader.name : 'A friend'} is ${lagSeconds}s ahead of you. Glance away from group chat if big events occur!`;
-        
-        cautionBox.classList.add('hidden');
-
-        if (relativeSubtext) {
-          relativeSubtext.innerHTML = `<span class="text-amber-400 font-bold">⚠️ Delayed: -${lagSeconds}s behind ${leader ? leader.name : 'Leader'}</span>`;
-        }
-      }
-
-      // 4. Render Group Leaderboard List
-      renderLeaderboard(participantsList, maxSeconds);
-    }
-
-    function renderLeaderboard(list, maxSeconds) {
-      const container = document.getElementById('participantListContainer');
-      if (!container) return;
-
-      if (list.length === 0) {
-        container.innerHTML = `
-          <div class="py-12 text-center text-slate-500 text-xs">
-            No active viewers in this room yet.
-          </div>
-        `;
-        return;
-      }
-
-      container.innerHTML = list.map((item, index) => {
-        const delta = item.calculatedSeconds - maxSeconds; // 0 or negative
-        const isLeader = (index === 0);
-        const lagSec = Math.abs(delta);
-
-        let badgeClass = '';
-        let badgeLabel = '';
-        let rowBg = item.isMe ? 'bg-surfaceBorder/40 border-emerald-500/30' : 'bg-pitch/60 border-surfaceBorder';
-
-        if (isLeader) {
-          badgeClass = 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30';
-          badgeLabel = '⚡ 0s (LIVE EDGE)';
-        } else if (lagSec <= 10) {
-          badgeClass = 'bg-amber-500/20 text-amber-300 border-amber-500/30';
-          badgeLabel = `-${lagSec}s (SLIGHT LAG)`;
-        } else {
-          badgeClass = 'bg-rose-500/20 text-rose-300 border-rose-500/30';
-          badgeLabel = `-${lagSec}s (DELAYED)`;
-        }
-
-        return `
-          <div class="p-3 rounded-xl border ${rowBg} flex items-center justify-between gap-3 transition hover:border-slate-600">
-            <div class="flex items-center space-x-2.5 min-w-0">
-              <div class="w-6 h-6 rounded-lg ${isLeader ? 'bg-emerald-500/20 text-emerald-400 font-extrabold' : 'bg-surfaceBorder text-slate-400'} flex items-center justify-center font-mono text-xs shrink-0">
-                #${index + 1}
-              </div>
-              <div class="min-w-0">
-                <div class="flex items-center gap-1.5">
-                  <span class="font-bold text-xs text-white truncate max-w-[120px] sm:max-w-[160px]">${escapeHtml(item.name)}</span>
-                  ${item.isMe ? '<span class="text-[9px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-1 rounded font-mono shrink-0">YOU</span>' : ''}
-                  ${item.isPaused ? '<span class="text-[9px] bg-amber-500/20 text-amber-400 border border-amber-500/30 px-1 rounded font-mono shrink-0">PAUSED</span>' : ''}
-                </div>
-                <div class="font-mono text-xs text-slate-400">
-                  ${formatMatchSeconds(item.calculatedSeconds)}
-                </div>
-              </div>
-            </div>
-
-            <div class="text-right shrink-0">
-              <span class="text-[10px] font-mono font-bold px-2 py-1 rounded-lg border ${badgeClass}">
-                ${badgeLabel}
-              </span>
-            </div>
-          </div>
-        `;
-      }).join('');
-    }
-
-    function escapeHtml(str) {
-      if (!str) return '';
-      return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-    }
-
-    function adjustAnchorSeconds(delta) {
-      playTone(delta > 0 ? 580 : 380, 'sine', 0.06);
-      const current = calculateCurrentSeconds(localAnchor);
-      const updated = Math.max(0, current + delta);
-      
-      localAnchor.matchSecondsAtAnchor = updated;
-      localAnchor.anchorTimestamp = Date.now();
-      
-      broadcastMyAnchor();
-      showToast(`Adjusted clock by ${delta > 0 ? '+' : ''}${delta}s`, 'info');
-    }
-
-    function setExactClock(minutes, seconds) {
-      const totalSec = (Math.max(0, parseInt(minutes) || 0) * 60) + Math.max(0, Math.min(59, parseInt(seconds) || 0));
-      localAnchor.matchSecondsAtAnchor = totalSec;
-      localAnchor.anchorTimestamp = Date.now();
-      playTone(660, 'sine', 0.12);
-      broadcastMyAnchor();
-      showToast(`Match clock synchronized to ${formatMatchSeconds(totalSec)}`, 'success');
-    }
-
-    function togglePauseClock() {
-      const current = calculateCurrentSeconds(localAnchor);
-      localAnchor.matchSecondsAtAnchor = current;
-      localAnchor.anchorTimestamp = Date.now();
-      localAnchor.isPaused = !localAnchor.isPaused;
-      
-      playTone(localAnchor.isPaused ? 320 : 640, 'triangle', 0.1);
-      broadcastMyAnchor();
-      showToast(localAnchor.isPaused ? "Clock paused for halftime/stoppage." : "Clock resumed ticking!", "info");
-    }
-
-    window.addEventListener('DOMContentLoaded', async () => {
-      await initFirebase();
-
-      // Check URL parameters for ?room=
-      const urlParams = new URLSearchParams(window.location.search);
-      const roomParam = urlParams.get('room');
-      if (roomParam) {
-        document.getElementById('joinRoomCodeInput').value = roomParam.trim().toUpperCase();
-      }
-
-      // Random room generator
-      document.getElementById('generateRandomRoomBtn').addEventListener('click', () => {
-        const adjectives = ['FINAL', 'DERBY', 'LEAGUE', 'CUP', 'MATCH', 'CHAMP'];
-        const num = Math.floor(100 + Math.random() * 900);
-        const code = adjectives[Math.floor(Math.random() * adjectives.length)] + '-' + num;
-        document.getElementById('joinRoomCodeInput').value = code;
-        playTone(520, 'sine', 0.05);
-      });
-
-      // Sound toggle
-      document.getElementById('soundToggleBtn').addEventListener('click', () => {
-        soundEnabled = !soundEnabled;
-        document.getElementById('soundIcon').textContent = soundEnabled ? '🔊' : '🔇';
-        showToast(soundEnabled ? "Audio cues enabled" : "Audio muted", "info");
-        if (soundEnabled) playTone(440);
-      });
-
-      // Start / Join Room
-      document.getElementById('startSyncBtn').addEventListener('click', () => {
-        const nameInput = document.getElementById('joinUserNameInput').value.trim();
-        const roomInput = document.getElementById('joinRoomCodeInput').value.trim().toUpperCase();
-        const minVal = parseInt(document.getElementById('initialMinInput').value) || 0;
-        const secVal = parseInt(document.getElementById('initialSecInput').value) || 0;
-
-        if (!nameInput) {
-          showToast("Please enter your name or nickname.", "warning");
-          document.getElementById('joinUserNameInput').focus();
-          return;
-        }
-
-        const activeRoom = roomInput || 'MATCH-' + Math.floor(100 + Math.random() * 900);
-        currentRoomId = activeRoom;
-        currentUserName = nameInput;
-
-        // Set initial anchor
-        localAnchor.matchSecondsAtAnchor = (minVal * 60) + secVal;
-        localAnchor.anchorTimestamp = Date.now();
-        localAnchor.isPaused = false;
-
-        // Switch to Dashboard View
-        document.getElementById('welcomeView').classList.add('hidden');
-        document.getElementById('dashboardView').classList.remove('hidden');
-        document.getElementById('roomBadgeContainer').classList.remove('hidden');
-        document.getElementById('roomBadgeContainer').classList.add('flex');
-        document.getElementById('changeRoomBtn').classList.remove('hidden');
-        
-        document.getElementById('currentRoomCodeLabel').textContent = currentRoomId;
-        document.getElementById('myDisplayNameLabel').innerHTML = `
-          <span>${escapeHtml(currentUserName)}</span>
-          <span class="text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full font-mono">YOU</span>
-        `;
-
-        // Update URL query string without reloading page
-        const newUrl = new URL(window.location.href);
-        newUrl.searchParams.set('room', currentRoomId);
-        window.history.replaceState({}, '', newUrl);
-
-        // Connect room and start ticking
-        listenToRoom(currentRoomId);
-        broadcastMyAnchor();
-        startLiveTicker();
-
-        playTone(600, 'sine', 0.1);
-        showToast(`Joined sync room: ${currentRoomId}`, 'success');
-      });
-
-      // Recalibration buttons (-15s, -5s, -1s, +1s, +5s, +15s)
-      document.querySelectorAll('.nudgeBtn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          const nudge = parseInt(e.currentTarget.getAttribute('data-nudge'));
-          adjustAnchorSeconds(nudge);
-        });
-      });
-
-      // Quick Match Presets (00:00, 45:00, 90:00)
-      document.querySelectorAll('.presetBtn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          const targetSeconds = parseInt(e.currentTarget.getAttribute('data-preset'));
-          localAnchor.matchSecondsAtAnchor = targetSeconds;
-          localAnchor.anchorTimestamp = Date.now();
-          broadcastMyAnchor();
-          playTone(550, 'sine', 0.1);
-          showToast(`Clock set to preset: ${formatMatchSeconds(targetSeconds)}`, 'info');
-        });
-      });
-
-      // Halftime / Pause button
-      document.getElementById('togglePauseBtn').addEventListener('click', () => {
-        togglePauseClock();
-      });
-
-      // Exact Time Modal Controls
-      const exactModal = document.getElementById('exactTimeModal');
-      document.getElementById('openExactTimeModalBtn').addEventListener('click', () => {
-        const currentSec = calculateCurrentSeconds(localAnchor);
-        document.getElementById('exactMinInput').value = Math.floor(currentSec / 60);
-        document.getElementById('exactSecInput').value = currentSec % 60;
-        exactModal.classList.remove('hidden');
-        exactModal.classList.add('flex');
-      });
-
-      document.getElementById('closeExactModalBtn').addEventListener('click', () => {
-        exactModal.classList.add('hidden');
-        exactModal.classList.remove('flex');
-      });
-      document.getElementById('cancelExactTimeBtn').addEventListener('click', () => {
-        exactModal.classList.add('hidden');
-        exactModal.classList.remove('flex');
-      });
-
-      document.getElementById('saveExactTimeBtn').addEventListener('click', () => {
-        const m = document.getElementById('exactMinInput').value;
-        const s = document.getElementById('exactSecInput').value;
-        setExactClock(m, s);
-        exactModal.classList.add('hidden');
-        exactModal.classList.remove('flex');
-      });
-
-      const inviteModal = document.getElementById('inviteModal');
-      const shareUrlInput = document.getElementById('shareUrlInput');
-
-      function openInviteDialog() {
-        const fullUrl = window.location.origin + window.location.pathname + '?room=' + encodeURIComponent(currentRoomId);
-        shareUrlInput.value = fullUrl;
-        inviteModal.classList.remove('hidden');
-        inviteModal.classList.add('flex');
-      }
-
-      document.getElementById('inviteFriendsBtn').addEventListener('click', openInviteDialog);
-      document.getElementById('copyInviteBtn').addEventListener('click', openInviteDialog);
-      document.getElementById('closeInviteModalBtn').addEventListener('click', () => {
-        inviteModal.classList.add('hidden');
-        inviteModal.classList.remove('flex');
-      });
-
-      // Safe clipboard copy using document.execCommand
-      function copyToClipboard(text, successMsg = "Link copied to clipboard!") {
-        const tempText = document.createElement('textarea');
-        tempText.value = text;
-        tempText.setAttribute('readonly', '');
-        tempText.style.position = 'absolute';
-        tempText.style.left = '-9999px';
-        document.body.appendChild(tempText);
-        tempText.select();
-        try {
-          document.execCommand('copy');
-          showToast(successMsg, 'success');
-          playTone(700, 'sine', 0.07);
-        } catch (err) {
-          showToast("Please copy link manually", "warning");
-        }
-        document.body.removeChild(tempText);
-      }
-
-      document.getElementById('copyShareUrlBtn').addEventListener('click', () => {
-        copyToClipboard(shareUrlInput.value, "Match sync room link copied!");
-      });
-
-      document.getElementById('shareWhatsAppBtn').addEventListener('click', () => {
-        const fullUrl = window.location.origin + window.location.pathname + '?room=' + encodeURIComponent(currentRoomId);
-        const text = `⚽ Join our football match sync room so we don't spoil goals in chat! Sync your broadcast here: ${fullUrl}`;
-        copyToClipboard(text, "WhatsApp message copied! Paste it in your group.");
-      });
-
-      // Exit Room
-      document.getElementById('changeRoomBtn').addEventListener('click', () => {
-        if (tickInterval) clearInterval(tickInterval);
-        if (unsubscribeSnapshot) {
-          unsubscribeSnapshot();
-          unsubscribeSnapshot = null;
-        }
-
-        // Clean up from map
-        if (db && currentUserId && currentRoomId) {
-          try {
-            const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'match_streams', `${currentRoomId}_${currentUserId}`);
-            deleteDoc(docRef);
-          } catch (e) {}
-        }
-
-        participantsMap.clear();
-        currentRoomId = null;
-
-        document.getElementById('dashboardView').classList.add('hidden');
-        document.getElementById('welcomeView').classList.remove('hidden');
-        document.getElementById('roomBadgeContainer').classList.add('hidden');
-        document.getElementById('roomBadgeContainer').classList.remove('flex');
-        document.getElementById('changeRoomBtn').classList.add('hidden');
-
-        // Reset URL
-        const newUrl = new URL(window.location.href);
-        newUrl.searchParams.delete('room');
-        window.history.replaceState({}, '', newUrl);
-
-        showToast("Exited match room", "info");
-      });
-
-      // Auto-enter room if parameter was present
-      if (roomParam) {
-        document.getElementById('joinUserNameInput').focus();
-      }
-    });
-  </script>
+  <script src="sync.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>
