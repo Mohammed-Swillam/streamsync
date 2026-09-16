@@ -185,6 +185,134 @@ input[type="number"] {
 .clock-grid { grid-template-columns: 1fr 1fr; }
 .nudge-grid { grid-template-columns: repeat(6, 1fr); }
 
+.scorebug {
+  margin-top: 4px;
+}
+
+.scorebug-shell {
+  background: #0b100a;
+  border: 1px solid #3a5a32;
+  box-shadow: inset 0 0 0 1px rgba(182, 255, 59, 0.08);
+  padding: 12px 12px 10px;
+}
+
+.scorebug-kicker {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 0.7rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.scorebug-live {
+  color: #12200c;
+  background: var(--ahead);
+  padding: 2px 7px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.scorebug-face {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 6px;
+}
+
+.scorebug-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.scorebug-digits {
+  width: 100%;
+  min-height: 72px;
+  background: #071008;
+  border: 1px solid #2d4a28;
+  color: var(--ahead);
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  font-size: clamp(2.4rem, 10vw, 3.4rem);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.06em;
+  text-shadow: 0 0 18px rgba(182, 255, 59, 0.28);
+  line-height: 1;
+}
+
+.scorebug.is-typing .scorebug-digits {
+  border-color: var(--ahead);
+  box-shadow: 0 0 0 1px rgba(182, 255, 59, 0.35);
+}
+
+.scorebug-colon {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 2.6rem;
+  font-weight: 800;
+  color: var(--ahead);
+  padding-bottom: 18px;
+  animation: colonBlink 1.2s steps(1) infinite;
+}
+
+.scorebug.is-typing .scorebug-colon {
+  animation: none;
+}
+
+@keyframes colonBlink {
+  50% { opacity: 0.25; }
+}
+
+.scorebug-step {
+  width: 100%;
+  min-height: 40px;
+  padding: 0;
+  font-size: 1.2rem;
+  font-weight: 700;
+  background: #141c13;
+}
+
+.scorebug-part {
+  font-size: 0.68rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.scorebug-type {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+  border: 0;
+  background: transparent;
+  color: transparent;
+  font-size: 16px;
+}
+
+.scorebug-presets {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.scorebug-presets button {
+  min-height: 40px;
+  padding: 8px 6px;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+}
+
+.scorebug.is-following .scorebug-live {
+  background: var(--you);
+}
+
 .hint {
   margin: 8px 0 0;
   color: var(--muted);
@@ -328,6 +456,11 @@ button:focus-visible {
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 14px;
+}
+
+.toolbar .primary {
+  width: auto;
+  margin-top: 0;
 }
 
 .board-head {

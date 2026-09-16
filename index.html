@@ -6,7 +6,6 @@
   <meta name="description" content="Compare live football broadcast delay with friends in other countries.">
   <title>StreamSync — broadcast delay meter</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%23b6ff3b'/%3E%3Ctext x='32' y='44' text-anchor='middle' font-size='28' font-family='Arial' font-weight='700' fill='%2312200c'%3ESS%3C/text%3E%3C/svg%3E">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%23b6ff3b'/%3E%3Ctext x='32' y='44' text-anchor='middle' font-size='28' font-family='Arial' font-weight='700' fill='%2312200c'%3ESS%3C/text%3E%3C/svg%3E">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -53,18 +52,37 @@
         </div>
         <p class="hint">Share the room link after you join. Refreshing this page keeps you in the room with the same clock. Use Exit when you are done.</p>
 
-        <label>Match clock on your screen right now</label>
-        <div class="clock-grid">
-          <div>
-            <label for="initialMinInput">Minutes</label>
-            <input id="initialMinInput" type="number" min="0" max="199" value="0" inputmode="numeric">
-          </div>
-          <div>
-            <label for="initialSecInput">Seconds</label>
-            <input id="initialSecInput" type="number" min="0" max="59" value="0" inputmode="numeric">
+        <label id="joinClockLabel">Match clock on your screen right now</label>
+        <div id="joinScorebug" class="scorebug" role="group" aria-labelledby="joinClockLabel">
+          <div class="scorebug-shell">
+            <div class="scorebug-kicker">
+              <span class="scorebug-live">Live</span>
+              <span id="joinClockSource">TV match clock</span>
+            </div>
+            <div class="scorebug-face">
+              <div class="scorebug-col">
+                <button type="button" class="scorebug-step" data-part="min" data-delta="1" aria-label="Add one minute">+</button>
+                <button type="button" class="scorebug-digits" data-part="min" aria-label="Minutes, tap to type">00</button>
+                <button type="button" class="scorebug-step" data-part="min" data-delta="-1" aria-label="Subtract one minute">−</button>
+                <span class="scorebug-part">Min</span>
+              </div>
+              <div class="scorebug-colon" aria-hidden="true">:</div>
+              <div class="scorebug-col">
+                <button type="button" class="scorebug-step" data-part="sec" data-delta="1" aria-label="Add one second">+</button>
+                <button type="button" class="scorebug-digits" data-part="sec" aria-label="Seconds, tap to type">00</button>
+                <button type="button" class="scorebug-step" data-part="sec" data-delta="-1" aria-label="Subtract one second">−</button>
+                <span class="scorebug-part">Sec</span>
+              </div>
+              <input class="scorebug-type" type="text" inputmode="numeric" autocomplete="off" autocorrect="off" spellcheck="false" maxlength="5" aria-label="Type match time as 1040 for 10:40">
+            </div>
+            <div class="scorebug-presets">
+              <button type="button" data-preset="0">KO 00:00</button>
+              <button type="button" data-preset="2700">HT 45:00</button>
+              <button type="button" data-preset="5400">FT 90:00</button>
+            </div>
           </div>
         </div>
-        <p class="hint">Look at the TV timer and type it in. You can nudge it after you join.</p>
+        <p id="joinClockHint" class="hint">Look at the TV timer. Use + / −, or tap the digits and type 1040 for 10:40.</p>
 
         <button id="startSyncBtn" class="primary" type="submit">Enter room</button>
       </form>
@@ -149,15 +167,34 @@
   <div id="exactModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="exactTitle">
     <div class="modal-card">
       <h3 id="exactTitle">Set exact match clock</h3>
-      <p class="hint">Type the minutes and seconds currently on your screen.</p>
-      <div class="clock-grid">
-        <div>
-          <label for="exactMinInput">Minutes</label>
-          <input id="exactMinInput" type="number" min="0" max="199" value="0">
-        </div>
-        <div>
-          <label for="exactSecInput">Seconds</label>
-          <input id="exactSecInput" type="number" min="0" max="59" value="0">
+      <p class="hint">Match the minutes and seconds currently on your screen.</p>
+      <div id="exactScorebug" class="scorebug" role="group" aria-labelledby="exactTitle">
+        <div class="scorebug-shell">
+          <div class="scorebug-kicker">
+            <span class="scorebug-live">Live</span>
+            <span>TV match clock</span>
+          </div>
+          <div class="scorebug-face">
+            <div class="scorebug-col">
+              <button type="button" class="scorebug-step" data-part="min" data-delta="1" aria-label="Add one minute">+</button>
+              <button type="button" class="scorebug-digits" data-part="min" aria-label="Minutes, tap to type">00</button>
+              <button type="button" class="scorebug-step" data-part="min" data-delta="-1" aria-label="Subtract one minute">−</button>
+              <span class="scorebug-part">Min</span>
+            </div>
+            <div class="scorebug-colon" aria-hidden="true">:</div>
+            <div class="scorebug-col">
+              <button type="button" class="scorebug-step" data-part="sec" data-delta="1" aria-label="Add one second">+</button>
+              <button type="button" class="scorebug-digits" data-part="sec" aria-label="Seconds, tap to type">00</button>
+              <button type="button" class="scorebug-step" data-part="sec" data-delta="-1" aria-label="Subtract one second">−</button>
+              <span class="scorebug-part">Sec</span>
+            </div>
+            <input class="scorebug-type" type="text" inputmode="numeric" autocomplete="off" autocorrect="off" spellcheck="false" maxlength="5" aria-label="Type match time as 1040 for 10:40">
+          </div>
+          <div class="scorebug-presets">
+            <button type="button" data-preset="0">KO 00:00</button>
+            <button type="button" data-preset="2700">HT 45:00</button>
+            <button type="button" data-preset="5400">FT 90:00</button>
+          </div>
         </div>
       </div>
       <div class="toolbar">

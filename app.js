@@ -31,9 +31,119 @@
   var eventSource = null;
   var broadcast = null;
   var audioCtx = null;
+  var joinClock = null;
+  var exactClock = null;
+  var joinFollow = null;
+  var joinFollowLocked = false;
+  var joinFollowTicker = null;
+  var peekTimer = null;
+  var DEFAULT_JOIN_HINT = "Look at the TV timer. Use + / −, or tap the digits and type 1040 for 10:40.";
 
   function $(id) {
     return document.getElementById(id);
+  }
+
+  function createScorebug(root, options) {
+    var total = 0;
+    var minEl = root.querySelector(".scorebug-digits[data-part='min']");
+    var secEl = root.querySelector(".scorebug-digits[data-part='sec']");
+    var typeEl = root.querySelector(".scorebug-type");
+    var holdTimer = null;
+    var holdDelay = null;
+    options = options || {};
+
+    function notifyUser() {
+      if (options.onUserChange) options.onUserChange(get());
+    }
+
+    function render() {
+      var parts = S.splitClock(total);
+      minEl.textContent = String(parts.minutes).padStart(2, "0");
+      secEl.textContent = String(parts.seconds).padStart(2, "0");
+      root.setAttribute("data-total", String(parts.total));
+    }
+
+    function set(seconds, opts) {
+      total = S.splitClock(seconds).total;
+      typeEl.value = "";
+      root.classList.remove("is-typing");
+      render();
+      if (!opts || !opts.silent) notifyUser();
+    }
+
+    function get() {
+      return S.splitClock(total).total;
+    }
+
+    function step(part, delta) {
+      total = S.stepClock(total, part, delta);
+      typeEl.value = "";
+      root.classList.remove("is-typing");
+      render();
+      notifyUser();
+    }
+
+    function stopHold() {
+      clearTimeout(holdDelay);
+      clearInterval(holdTimer);
+      holdDelay = null;
+      holdTimer = null;
+    }
+
+    root.querySelectorAll(".scorebug-step").forEach(function (btn) {
+      var part = btn.getAttribute("data-part");
+      var delta = parseInt(btn.getAttribute("data-delta"), 10);
+      function run() {
+        step(part, delta);
+      }
+      btn.addEventListener("pointerdown", function (event) {
+        if (event.pointerType === "mouse" && event.button !== 0) return;
+        event.preventDefault();
+        if (btn.setPointerCapture) btn.setPointerCapture(event.pointerId);
+        run();
+        holdDelay = setTimeout(function () {
+          holdTimer = setInterval(run, 75);
+        }, 360);
+      });
+      btn.addEventListener("pointerup", stopHold);
+      btn.addEventListener("pointercancel", stopHold);
+      btn.addEventListener("lostpointercapture", stopHold);
+    });
+
+    root.querySelectorAll(".scorebug-digits").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        typeEl.focus();
+        typeEl.click();
+      });
+    });
+
+    typeEl.addEventListener("focus", function () {
+      root.classList.add("is-typing");
+      typeEl.value = "";
+    });
+
+    typeEl.addEventListener("input", function () {
+      var raw = typeEl.value.replace(/\D/g, "").slice(0, 5);
+      typeEl.value = raw;
+      if (raw) total = S.parseTypedClock(raw);
+      render();
+      if (raw) notifyUser();
+    });
+
+    typeEl.addEventListener("blur", function () {
+      root.classList.remove("is-typing");
+      typeEl.value = "";
+      render();
+    });
+
+    root.querySelectorAll(".scorebug-presets [data-preset]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        set(parseInt(btn.getAttribute("data-preset"), 10));
+      });
+    });
+
+    render();
+    return { set: set, get: get };
   }
 
   function showToast(message) {
@@ -187,6 +297,96 @@
     return true;
   }
 
+  function updateJoinFollowHint() {
+    var hint = $("joinClockHint");
+    var source = $("joinClockSource");
+    var scorebug = $("joinScorebug");
+    if (!hint || !source || !scorebug) return;
+    if (joinFollow && !joinFollowLocked && !state.roomId) {
+      var live = {
+        name: joinFollow.name,
+        viewerCount: joinFollow.viewerCount,
+        calculatedSeconds: S.calculateCurrentSeconds(joinFollow, Date.now())
+      };
+      hint.textContent = S.joinSeedHint(live);
+      source.textContent = "From " + (joinFollow.name || "room");
+      scorebug.classList.add("is-following");
+    } else {
+      hint.textContent = DEFAULT_JOIN_HINT;
+      source.textContent = "TV match clock";
+      scorebug.classList.remove("is-following");
+    }
+  }
+
+  function lockJoinFollow() {
+    if (state.roomId) return;
+    joinFollowLocked = true;
+    joinFollow = null;
+    updateJoinFollowHint();
+  }
+
+  function stopJoinFollowTicker() {
+    if (joinFollowTicker) {
+      clearInterval(joinFollowTicker);
+      joinFollowTicker = null;
+    }
+  }
+
+  function startJoinFollowTicker() {
+    if (joinFollowTicker) return;
+    joinFollowTicker = setInterval(function () {
+      if (state.roomId || joinFollowLocked || !joinFollow || !joinClock) return;
+      joinClock.set(S.calculateCurrentSeconds(joinFollow, Date.now()), { silent: true });
+    }, 250);
+  }
+
+  async function peekRoomLeader(roomId) {
+    var room = S.sanitizeRoomCode(roomId);
+    if (!room) return null;
+    var keys = S.roomKeys(room);
+    var ids = S.decodeRoster(await kvGet(keys.roster));
+    if (!ids.length) return null;
+    var rows = await Promise.all(ids.map(function (id) {
+      return kvGet(keys.user(id)).then(function (raw) {
+        return S.decodeViewer(id, raw);
+      }).catch(function () { return null; });
+    }));
+    return S.pickRoomLeader(rows, Date.now());
+  }
+
+  async function peekAndSeedJoinClock() {
+    if (state.roomId || joinFollowLocked || !joinClock) return;
+    var room = S.sanitizeRoomCode($("joinRoomCodeInput").value);
+    if (!room) {
+      joinFollow = null;
+      joinClock.set(0, { silent: true });
+      updateJoinFollowHint();
+      return;
+    }
+    try {
+      var leader = await peekRoomLeader(room);
+      if (state.roomId || joinFollowLocked) return;
+      if (!leader) {
+        joinFollow = null;
+        joinClock.set(0, { silent: true });
+        updateJoinFollowHint();
+        return;
+      }
+      joinFollow = leader;
+      joinClock.set(leader.calculatedSeconds, { silent: true });
+      updateJoinFollowHint();
+      startJoinFollowTicker();
+    } catch (err) {
+      if (!joinFollowLocked) updateJoinFollowHint();
+    }
+  }
+
+  function scheduleJoinPeek() {
+    joinFollowLocked = false;
+    clearTimeout(peekTimer);
+    peekTimer = setTimeout(peekAndSeedJoinClock, 350);
+  }
+
   function markLive() {
     state.lastGoodSync = Date.now();
     setNetState("live");
@@ -232,6 +432,7 @@
     if (!state.roomId) return;
     if (options.leave) clearSession();
     else persistSession();
+    render();
     var keys = S.roomKeys(state.roomId);
     var payload = livePayload(options.leave ? "leave" : "sync");
     publishLocal(payload);
@@ -566,6 +767,9 @@
     persistName(state.name);
     rememberMe();
     persistSession();
+    stopJoinFollowTicker();
+    joinFollow = null;
+    joinFollowLocked = true;
 
     $("welcomeView").classList.add("hidden");
     $("dashboardView").classList.remove("hidden");
@@ -604,9 +808,15 @@
     url.searchParams.delete("room");
     history.replaceState({}, "", url);
     showToast("Left the room");
+    joinFollowLocked = false;
+    scheduleJoinPeek();
   }
 
   function bind() {
+    joinClock = createScorebug($("joinScorebug"), {
+      onUserChange: lockJoinFollow
+    });
+    exactClock = createScorebug($("exactScorebug"));
     loadPersisted();
     var params = new URLSearchParams(window.location.search);
     var roomParam = S.sanitizeRoomCode(params.get("room") || "");
@@ -617,8 +827,7 @@
     if (saved && S.sessionShouldResume(saved, roomParam)) {
       var current = S.calculateCurrentSeconds(saved, Date.now());
       $("joinUserNameInput").value = saved.name;
-      $("initialMinInput").value = Math.floor(current / 60);
-      $("initialSecInput").value = current % 60;
+      joinClock.set(current);
       enterRoom({
         name: saved.name,
         room: saved.roomId,
@@ -627,11 +836,20 @@
         isPaused: saved.isPaused,
         resumed: true
       });
+    } else {
+      peekAndSeedJoinClock();
     }
+
+    setInterval(function () {
+      if (!state.roomId && !joinFollowLocked) peekAndSeedJoinClock();
+    }, 5000);
 
     $("generateRandomRoomBtn").addEventListener("click", function () {
       $("joinRoomCodeInput").value = S.randomRoomCode();
+      scheduleJoinPeek();
     });
+
+    $("joinRoomCodeInput").addEventListener("input", scheduleJoinPeek);
 
     $("joinForm").addEventListener("submit", function (event) {
       event.preventDefault();
@@ -641,11 +859,12 @@
         $("joinUserNameInput").focus();
         return;
       }
+      var picked = S.splitClock(joinClock.get());
       enterRoom({
         name: name,
         room: $("joinRoomCodeInput").value,
-        minutes: $("initialMinInput").value,
-        seconds: $("initialSecInput").value
+        minutes: picked.minutes,
+        seconds: picked.seconds
       });
     });
 
@@ -674,13 +893,12 @@
 
     $("pauseBtn").addEventListener("click", togglePause);
     $("openExactBtn").addEventListener("click", function () {
-      var current = S.calculateCurrentSeconds(myRecord());
-      $("exactMinInput").value = Math.floor(current / 60);
-      $("exactSecInput").value = current % 60;
+      exactClock.set(S.calculateCurrentSeconds(myRecord()));
       openModal("exactModal");
     });
     $("saveExactBtn").addEventListener("click", function () {
-      setExact($("exactMinInput").value, $("exactSecInput").value);
+      var picked = S.splitClock(exactClock.get());
+      setExact(picked.minutes, picked.seconds);
       closeModal("exactModal");
     });
     $("cancelExactBtn").addEventListener("click", function () {

@@ -31,6 +31,17 @@ eq("format ignores junk", sync.formatMatchSeconds("nope"), "00:00");
 eq("parse clock 10:40", sync.parseClockInputs("10", "40"), 640);
 eq("parse clamps seconds", sync.parseClockInputs(12, 99), 12 * 60 + 59);
 eq("parse empty", sync.parseClockInputs("", ""), 0);
+eq("type 7 means 7:00", sync.parseTypedClock("7"), 7 * 60);
+eq("type 73 means 73:00", sync.parseTypedClock("73"), 73 * 60);
+eq("type 730 means 7:30", sync.parseTypedClock("730"), 7 * 60 + 30);
+eq("type 1040 means 10:40", sync.parseTypedClock("1040"), 640);
+eq("type 73:08", sync.parseTypedClock("73:08"), 73 * 60 + 8);
+eq("type 104:00 extra time", sync.parseTypedClock("10400"), 104 * 60);
+eq("typed seconds clamp at 59", sync.parseTypedClock("1061"), 10 * 60 + 59);
+eq("split 10:40", sync.splitClock(640).minutes, 10);
+eq("step +1 minute", sync.stepClock(640, "min", 1), 700);
+eq("step +1 second wraps", sync.stepClock(10 * 60 + 59, "sec", 1), 11 * 60);
+eq("step -1 second at zero stays", sync.stepClock(0, "sec", -1), 0);
 
 var frozen = Date.now();
 eq(
@@ -192,6 +203,57 @@ var paused = sync.parseStoredSession(
   savedAt + 60000
 );
 eq("paused session stays paused after refresh", sync.calculateCurrentSeconds(paused, savedAt + 60000), 2700);
+
+eq("empty room has no leader", sync.pickRoomLeader([], now), null);
+
+var only = sync.pickRoomLeader(
+  [
+    {
+      userId: "host",
+      name: "Elpop",
+      matchSecondsAtAnchor: 1800,
+      anchorTimestamp: now,
+      lastSeen: now,
+      isPaused: false
+    }
+  ],
+  now
+);
+eq("solo room leader is the only viewer", only.name, "Elpop");
+eq("solo room leader clock", only.calculatedSeconds, 1800);
+eq("solo room viewerCount", only.viewerCount, 1);
+eq(
+  "solo seed hint names the host",
+  sync.joinSeedHint(only).indexOf("Elpop") !== -1,
+  true
+);
+
+var ahead = sync.pickRoomLeader(
+  [
+    {
+      userId: "slow",
+      name: "Tom",
+      matchSecondsAtAnchor: 1800,
+      anchorTimestamp: now,
+      lastSeen: now
+    },
+    {
+      userId: "fast",
+      name: "Sara",
+      matchSecondsAtAnchor: 1830,
+      anchorTimestamp: now,
+      lastSeen: now
+    }
+  ],
+  now
+);
+eq("multi room leader is the live edge", ahead.name, "Sara");
+eq("multi room viewerCount", ahead.viewerCount, 2);
+eq(
+  "multi seed hint mentions live edge",
+  sync.joinSeedHint(ahead).indexOf("live edge") !== -1,
+  true
+);
 
 console.log("\n" + passed + " passed, " + failed + " failed");
 process.exit(failed ? 1 : 0);
