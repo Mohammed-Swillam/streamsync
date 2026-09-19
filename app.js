@@ -4,7 +4,6 @@
   var S = window.StreamSync;
   var POLL_MS = 2500;
   var HEARTBEAT_MS = 12000;
-  var TICK_ALIGN_MS = 250;
   var UID_KEY = "streamsync:uid";
   var NAME_KEY = "streamsync:name";
   var SOUND_KEY = "streamsync:sound";
@@ -572,12 +571,13 @@
     }
   }
 
-  function rankedList() {
+  function rankedList(now) {
     rememberMe();
     var values = Object.keys(state.participants).map(function (id) {
       return state.participants[id];
     });
-    return S.decorateParticipants(values, state.userId, Date.now());
+    if (now == null) now = S.alignNowToDisplayedSecond(myRecord(), Date.now());
+    return S.decorateParticipants(values, state.userId, now);
   }
 
   function renderLeaderboard(list) {
@@ -643,12 +643,13 @@
 
   function render() {
     if (!state.roomId) return;
-    var list = rankedList();
+    var tickNow = S.alignNowToDisplayedSecond(myRecord(), Date.now());
+    var list = rankedList(tickNow);
     var me = null;
     var leader = list[0] || null;
     var next = list[1] || null;
     list.forEach(function (p) { if (p.isMe) me = p; });
-    var mySecs = me ? me.calculatedSeconds : S.calculateCurrentSeconds(myRecord());
+    var mySecs = me ? me.calculatedSeconds : S.calculateCurrentSeconds(myRecord(), tickNow);
 
     $("myClock").textContent = S.formatMatchSeconds(mySecs);
     $("myClock").classList.toggle("is-paused", state.isPaused);
@@ -667,7 +668,7 @@
       $("myRelative").textContent = "Waiting for the group";
       caution.classList.add("hidden");
     } else if (me && me.isLeader) {
-      var gapNext = next ? me.calculatedSeconds - next.calculatedSeconds : 0;
+      var gapNext = next ? Math.abs(next.deltaFromLeader) : 0;
       var wait = me.spoilerWaitSeconds;
       banner.dataset.role = "ahead";
       $("roleTitle").textContent = "You have the live edge";
@@ -695,11 +696,19 @@
     renderLeaderboard(list);
   }
 
+  function msUntilNextDisplayTick() {
+    var now = Date.now();
+    var tickNow = S.alignNowToDisplayedSecond(myRecord(), now);
+    var delay = tickNow + 1000 - now;
+    if (delay < 16) delay += 1000;
+    return Math.max(16, Math.min(1000, Math.round(delay)));
+  }
+
   function startTimers() {
     stopTimers();
     function alignTick() {
       render();
-      tickTimer = setTimeout(alignTick, TICK_ALIGN_MS);
+      tickTimer = setTimeout(alignTick, msUntilNextDisplayTick());
     }
     alignTick();
     pollTimer = setInterval(fetchRoom, POLL_MS);
