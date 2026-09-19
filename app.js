@@ -687,8 +687,8 @@
         : "You are tied at the front of the room.";
       $("myRelative").textContent = wait ? ("Ahead of the slowest feed by " + wait + "s") : "Tied for the lead";
       if (wait > 0) {
-        heroLabel.textContent = "Wait before reacting";
-        heroValue.textContent = wait + "s";
+        heroLabel.textContent = "Hold chat reactions";
+        heroValue.textContent = "Wait " + wait + "s";
         heroValue.classList.remove("hidden");
       } else {
         heroLabel.textContent = "Tied at the live edge";

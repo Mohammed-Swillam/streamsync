@@ -427,14 +427,14 @@ button:focus-visible {
 
 .role-hero-value {
   display: block;
-  font-size: clamp(2.6rem, 10vw, 4.2rem);
+  font-size: clamp(2.4rem, 11vw, 4.4rem);
   line-height: 0.9;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em;
 }
 
-.banner[data-role="ahead"] .role-hero-value { color: var(--behind); }
+.banner[data-role="ahead"] .role-hero-value { color: var(--danger); }
 .banner[data-role="behind"] .role-hero-value { color: var(--behind); }
 
 .role-hero .primary {
