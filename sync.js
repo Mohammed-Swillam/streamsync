@@ -256,6 +256,13 @@
     return "delayed";
   }
 
+  function waitSeverity(seconds) {
+    var n = Math.max(0, Math.floor(Number(seconds) || 0));
+    if (n <= 5) return "low";
+    if (n <= 15) return "mid";
+    return "high";
+  }
+
   function formatSignedSeconds(delta) {
     var n = Math.floor(Number(delta) || 0);
     if (n === 0) return "0s";
@@ -456,6 +463,7 @@
     isOnline: isOnline,
     shouldDrop: shouldDrop,
     delayBucket: delayBucket,
+    waitSeverity: waitSeverity,
     formatSignedSeconds: formatSignedSeconds,
     decorateParticipants: decorateParticipants,
     escapeHtml: escapeHtml,

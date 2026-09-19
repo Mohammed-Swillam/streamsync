@@ -147,6 +147,11 @@ eq("slight bucket at 5s", ranked[1].bucket, "slight");
 eq("slight bucket at 15s", ranked[2].bucket, "slight");
 eq("edge bucket", ranked[0].bucket, "edge");
 eq("16s is delayed", sync.delayBucket(-16), "delayed");
+eq("wait 1s is yellow", sync.waitSeverity(1), "low");
+eq("wait 5s is yellow", sync.waitSeverity(5), "low");
+eq("wait 6s is orange", sync.waitSeverity(6), "mid");
+eq("wait 15s is orange", sync.waitSeverity(15), "mid");
+eq("wait 16s is red", sync.waitSeverity(16), "high");
 
 var staggerT0 = 10_000;
 var staggerViewers = [
