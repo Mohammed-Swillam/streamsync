@@ -732,8 +732,9 @@ footer {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 0.84rem;
-    letter-spacing: 0.04em;
+    font-size: 0.88rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
   }
   .status-chip {
     border: 0;
@@ -747,15 +748,17 @@ footer {
     white-space: nowrap;
   }
   .header-tool {
-    width: 40px;
-    min-height: 40px;
+    width: 36px;
+    min-height: 36px;
     padding: 0;
+    border: 0;
+    background: transparent;
   }
-  .header-tool-label,
   #exitRoomBtn.header-tool {
     width: auto;
-    padding: 0 10px;
+    padding: 0 6px;
     font-size: 0.78rem;
+    color: var(--muted);
   }
   .header-tool-label { display: none; }
   .banner { grid-template-columns: 1fr; }
