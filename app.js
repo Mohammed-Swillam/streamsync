@@ -670,6 +670,7 @@
     heroInvite.classList.add("hidden");
     boardInvite.classList.remove("hidden");
     $("roleText").classList.remove("hidden");
+    heroLabel.classList.remove("hidden");
     delete banner.dataset.lag;
     delete banner.dataset.wait;
 
@@ -687,13 +688,14 @@
       $("roleTitle").textContent = wait ? "You are ahead" : "Tied";
       $("roleTag").textContent = wait ? "AHEAD" : "TIED";
       $("roleText").textContent = wait
-        ? "Hold chat until the slowest feed catches up."
+        ? ""
         : "You are tied at the front of the room.";
       $("myRelative").textContent = wait ? ("Ahead of the slowest feed by " + wait + "s") : "Tied for the lead";
       if (wait > 0) {
         banner.dataset.role = "ahead";
         banner.dataset.wait = S.waitSeverity(wait);
-        heroLabel.textContent = "Hold chat reactions";
+        heroLabel.textContent = "";
+        heroLabel.classList.add("hidden");
         heroValue.textContent = "Wait " + wait + "s";
         heroValue.classList.remove("hidden");
       } else {

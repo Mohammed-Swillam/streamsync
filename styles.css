@@ -525,6 +525,8 @@ button:focus-visible {
   text-align: center;
 }
 
+.banner[data-role="ahead"] .role-hero-label { display: none; }
+
 .role-hero-label {
   display: block;
   color: var(--muted);
