@@ -659,38 +659,50 @@
     $("participantCount").textContent = list.length + (list.length === 1 ? " viewer" : " viewers");
 
     var banner = $("roleBanner");
-    var caution = $("cautionBox");
+    var heroValue = $("roleHeroValue");
+    var heroLabel = $("roleHeroLabel");
+    var heroInvite = $("heroInviteBtn");
+    var boardInvite = $("inviteFriendsBtn");
+    heroValue.classList.add("hidden");
+    heroInvite.classList.add("hidden");
+    boardInvite.classList.remove("hidden");
+
     if (list.length <= 1) {
       banner.dataset.role = "solo";
       $("roleTitle").textContent = "Room ready";
       $("roleTag").textContent = "SOLO";
-      $("roleText").textContent = "Share the link. Friends enter the clock on their own TV.";
+      $("roleText").textContent = "Send the link. Friends type the clock on their TV.";
       $("myRelative").textContent = "Waiting for the group";
-      caution.classList.add("hidden");
+      heroLabel.textContent = "Invite friends";
+      heroInvite.classList.remove("hidden");
+      boardInvite.classList.add("hidden");
     } else if (me && me.isLeader) {
       var gapNext = next ? Math.abs(next.deltaFromLeader) : 0;
       var wait = me.spoilerWaitSeconds;
       banner.dataset.role = "ahead";
-      $("roleTitle").textContent = "You have the live edge";
+      $("roleTitle").textContent = "You are ahead";
       $("roleTag").textContent = "AHEAD";
       $("roleText").textContent = gapNext
         ? "You are " + gapNext + "s ahead of " + next.name + ". Hold chat reactions."
         : "You are tied at the front of the room.";
       $("myRelative").textContent = wait ? ("Ahead of the slowest feed by " + wait + "s") : "Tied for the lead";
       if (wait > 0) {
-        caution.classList.remove("hidden");
-        $("cautionValue").textContent = wait + "s";
+        heroLabel.textContent = "Wait before reacting";
+        heroValue.textContent = wait + "s";
+        heroValue.classList.remove("hidden");
       } else {
-        caution.classList.add("hidden");
+        heroLabel.textContent = "Tied at the live edge";
       }
     } else if (me && leader) {
       var lag = Math.abs(me.deltaFromLeader);
       banner.dataset.role = "behind";
-      $("roleTitle").textContent = "Your feed is delayed by " + lag + "s";
+      $("roleTitle").textContent = "Don't open the group chat";
       $("roleTag").textContent = lag > 15 ? "HIGH LAG" : "BEHIND";
-      $("roleText").textContent = leader.name + " is " + lag + "s ahead of you. Glance away from group chat on big moments.";
+      $("roleText").textContent = leader.name + " is " + lag + "s ahead of you.";
       $("myRelative").textContent = S.formatSignedSeconds(me.deltaFromLeader) + " vs " + leader.name;
-      caution.classList.add("hidden");
+      heroLabel.textContent = "behind " + leader.name;
+      heroValue.textContent = lag + "s";
+      heroValue.classList.remove("hidden");
     }
 
     renderLeaderboard(list);
@@ -911,21 +923,12 @@
       });
     });
 
-    document.querySelectorAll(".presetBtn").forEach(function (btn) {
-      btn.addEventListener("click", function () {
-        var seconds = parseInt(btn.getAttribute("data-preset"), 10);
-        state.matchSecondsAtAnchor = seconds;
-        state.anchorTimestamp = Date.now();
-        publishMe();
-        showToast("Clock set to " + S.formatMatchSeconds(seconds));
-      });
-    });
-
     $("pauseBtn").addEventListener("click", togglePause);
-    $("openExactBtn").addEventListener("click", function () {
+    function openExact() {
       exactClock.set(S.calculateCurrentSeconds(myRecord()));
       openModal("exactModal");
-    });
+    }
+    $("clockTapBtn").addEventListener("click", openExact);
     $("saveExactBtn").addEventListener("click", function () {
       var picked = S.splitClock(exactClock.get());
       setExact(picked.minutes, picked.seconds);
@@ -940,6 +943,7 @@
       openModal("inviteModal");
     }
     $("inviteFriendsBtn").addEventListener("click", openInvite);
+    $("heroInviteBtn").addEventListener("click", openInvite);
     $("copyInviteBtn").addEventListener("click", openInvite);
     $("closeInviteBtn").addEventListener("click", function () {
       closeModal("inviteModal");

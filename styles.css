@@ -183,7 +183,7 @@ input[type="number"] {
 }
 
 .clock-grid { grid-template-columns: 1fr 1fr; }
-.nudge-grid { grid-template-columns: repeat(3, 1fr); }
+.nudge-grid { grid-template-columns: repeat(2, 1fr); }
 
 .scorebug {
   margin-top: 4px;
@@ -374,14 +374,13 @@ button:focus-visible {
   padding: 16px 18px;
   border: 1px solid var(--line);
   background: var(--panel);
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(160px, 0.8fr);
   gap: 16px;
   align-items: center;
-  flex-wrap: wrap;
 }
 
-.banner[data-role="solo"] { border-color: var(--line); }
+.banner[data-role="solo"] { border-color: var(--ahead); }
 .banner[data-role="ahead"] {
   background: #2a160f;
   border-color: var(--danger);
@@ -409,15 +408,39 @@ button:focus-visible {
   letter-spacing: 0.08em;
 }
 
-.caution {
+.role-hero {
   text-align: right;
 }
 
-.caution strong {
+.banner[data-role="solo"] .role-hero {
+  text-align: center;
+}
+
+.role-hero-label {
   display: block;
-  font-size: 1.6rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.role-hero-value {
+  display: block;
+  font-size: clamp(2.6rem, 10vw, 4.2rem);
+  line-height: 0.9;
+  font-weight: 800;
   font-variant-numeric: tabular-nums;
-  color: var(--behind);
+  letter-spacing: 0.02em;
+}
+
+.banner[data-role="ahead"] .role-hero-value { color: var(--behind); }
+.banner[data-role="behind"] .role-hero-value { color: var(--behind); }
+
+.role-hero .primary {
+  width: 100%;
+  margin-top: 0;
+  min-height: 52px;
 }
 
 .layout {
@@ -442,11 +465,32 @@ button:focus-visible {
 }
 
 .clock-readout {
+  display: block;
+  width: 100%;
   margin: 18px 0 8px;
-  padding: 22px 10px;
+  padding: 22px 10px 16px;
   background: #0f140e;
   border: 1px solid var(--line);
   text-align: center;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  min-height: 0;
+}
+
+.clock-readout:hover { border-color: #4c6847; }
+.clock-readout:focus-visible {
+  outline: 2px solid var(--ahead);
+  outline-offset: 2px;
+}
+
+.clock-tap-hint {
+  display: block;
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .clock-readout .time {
@@ -592,5 +636,7 @@ footer {
 @media (max-width: 800px) {
   .layout { grid-template-columns: 1fr; }
   .header-inner { align-items: flex-start; }
-  .caution { text-align: left; }
+  .banner { grid-template-columns: 1fr; }
+  .role-hero { order: -1; text-align: left; }
+  .banner[data-role="solo"] .role-hero { text-align: left; }
 }

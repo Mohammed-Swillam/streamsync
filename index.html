@@ -90,17 +90,17 @@
 
     <section id="dashboardView" class="hidden">
       <div id="roleBanner" class="banner" data-role="solo">
-        <div>
+        <div class="banner-copy">
           <h3>
-            <span id="roleTitle">Waiting for friends</span>
+            <span id="roleTitle">Room ready</span>
             <span id="roleTag" class="tag">SOLO</span>
           </h3>
-          <p id="roleText">Share the room link so friends can punch in their own TV clocks.</p>
+          <p id="roleText">Send the link. Friends type the clock on their TV.</p>
         </div>
-        <div id="cautionBox" class="caution hidden">
-          <span>Wait at least</span>
-          <strong id="cautionValue">0s</strong>
-          <span>before reacting in chat</span>
+        <div class="role-hero">
+          <span id="roleHeroLabel" class="role-hero-label">Invite friends</span>
+          <strong id="roleHeroValue" class="role-hero-value hidden">0s</strong>
+          <button id="heroInviteBtn" class="primary" type="button">Invite</button>
         </div>
       </div>
 
@@ -108,28 +108,20 @@
         <section class="clock-card">
           <p class="kicker">Your broadcast</p>
           <h2 id="myNameLabel">You</h2>
-          <div class="clock-readout">
+          <button id="clockTapBtn" class="clock-readout" type="button" aria-label="Tap to set exact match clock">
             <div id="myClock" class="time mono">00:00</div>
             <div id="clockStatus" class="kicker">Feed ticking</div>
             <div id="myRelative" class="relative">Waiting for the group</div>
-          </div>
+            <span class="clock-tap-hint">Tap to match your TV</span>
+          </button>
 
-          <label>Quick calibrate</label>
           <div class="nudge-grid">
-            <button type="button" class="nudgeBtn" data-nudge="1">+1s</button>
-            <button type="button" class="nudgeBtn" data-nudge="5">+5s</button>
-            <button type="button" class="nudgeBtn" data-nudge="10">+10s</button>
             <button type="button" class="nudgeBtn" data-nudge="-1">−1s</button>
-            <button type="button" class="nudgeBtn" data-nudge="-5">−5s</button>
-            <button type="button" class="nudgeBtn" data-nudge="-10">−10s</button>
+            <button type="button" class="nudgeBtn" data-nudge="1">+1s</button>
           </div>
 
           <div class="toolbar">
             <button id="pauseBtn" type="button">Pause (halftime)</button>
-            <button id="openExactBtn" type="button">Set exact time</button>
-            <button class="presetBtn" type="button" data-preset="0">00:00 KO</button>
-            <button class="presetBtn" type="button" data-preset="2700">45:00 HT</button>
-            <button class="presetBtn" type="button" data-preset="5400">90:00 FT</button>
           </div>
         </section>
 
@@ -153,9 +145,8 @@
       </div>
 
       <div class="tips">
-        When a whistle, replay graphic, or round clock mark hits (24:30, 67:00), tap
-        <strong>Set exact time</strong> or nudge ±1s. The shared room only stores each person's
-        last reported match time, not a live video stream.
+        When a whistle or round clock mark hits (24:30, 67:00), tap the big clock or nudge ±1s.
+        The shared room only stores each person's last reported match time, not a live video stream.
       </div>
     </section>
   </main>
