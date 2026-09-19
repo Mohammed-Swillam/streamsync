@@ -828,6 +828,7 @@
     document.body.classList.add("in-room");
     $("roomChip").classList.add("is-visible");
     $("roomCodeLabel").textContent = state.roomId;
+    $("copyInviteBtn").setAttribute("aria-label", "Open invite for room " + state.roomId);
     $("syncStatus").classList.add("is-visible");
 
     var url = new URL(window.location.href);
@@ -854,6 +855,7 @@
     $("exitRoomBtn").classList.add("hidden");
     $("roomChip").classList.remove("is-visible");
     $("syncStatus").classList.remove("is-visible");
+    $("copyInviteBtn").removeAttribute("aria-label");
     document.body.classList.remove("in-room");
     closeModal("exactModal");
     closeModal("inviteModal");
