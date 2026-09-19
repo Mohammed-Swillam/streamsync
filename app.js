@@ -816,6 +816,7 @@
     $("welcomeView").classList.add("hidden");
     $("dashboardView").classList.remove("hidden");
     $("exitRoomBtn").classList.remove("hidden");
+    window.scrollTo(0, 0);
     $("roomChip").classList.add("is-visible");
     $("roomCodeLabel").textContent = state.roomId;
     $("syncStatus").classList.add("is-visible");

@@ -635,8 +635,15 @@ footer {
 
 @media (max-width: 800px) {
   .layout { grid-template-columns: 1fr; }
-  .header-inner { align-items: flex-start; }
+  .header-inner {
+    align-items: center;
+    padding: 8px 0;
+  }
+  .brand p { display: none; }
+  .header-actions { gap: 6px; }
+  .room-chip .ghost { display: none; }
   .banner { grid-template-columns: 1fr; }
   .role-hero { order: -1; text-align: left; }
   .banner[data-role="solo"] .role-hero { text-align: left; }
+  main { padding: 12px 0 36px; }
 }
