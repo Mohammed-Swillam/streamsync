@@ -109,8 +109,8 @@
           <p id="roleText">Send the link. Friends type the clock on their TV.</p>
         </div>
         <div class="role-hero">
-          <span id="roleHeroLabel" class="role-hero-label">Invite friends</span>
           <strong id="roleHeroValue" class="role-hero-value hidden">0s</strong>
+          <span id="roleHeroLabel" class="role-hero-label">Invite friends</span>
           <button id="heroInviteBtn" class="primary" type="button">Invite</button>
         </div>
       </div>
@@ -127,8 +127,12 @@
           </button>
 
           <div class="nudge-grid">
-            <button type="button" class="nudgeBtn" data-nudge="-1">−1s</button>
             <button type="button" class="nudgeBtn" data-nudge="1">+1s</button>
+            <button type="button" class="nudgeBtn" data-nudge="5">+5s</button>
+            <button type="button" class="nudgeBtn" data-nudge="10">+10s</button>
+            <button type="button" class="nudgeBtn" data-nudge="-1">−1s</button>
+            <button type="button" class="nudgeBtn" data-nudge="-5">−5s</button>
+            <button type="button" class="nudgeBtn" data-nudge="-10">−10s</button>
           </div>
 
           <div class="toolbar">
@@ -156,7 +160,7 @@
       </div>
 
       <div class="tips">
-        When a whistle or round clock mark hits (24:30, 67:00), tap the big clock or nudge ±1s.
+        When a whistle or round clock mark hits (24:30, 67:00), tap the big clock or nudge ±1 / ±5 / ±10.
         The shared room only stores each person's last reported match time, not a live video stream.
       </div>
     </section>

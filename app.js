@@ -671,6 +671,7 @@
     heroInvite.classList.add("hidden");
     boardInvite.classList.remove("hidden");
     $("roleText").classList.remove("hidden");
+    delete banner.dataset.lag;
 
     if (list.length <= 1) {
       banner.dataset.role = "solo";
@@ -701,6 +702,7 @@
     } else if (me && leader) {
       var lag = Math.abs(me.deltaFromLeader);
       banner.dataset.role = "behind";
+      banner.dataset.lag = lag > 15 ? "high" : "mild";
       $("roleTitle").textContent = "You are behind";
       $("roleTag").textContent = lag > 15 ? "HIGH LAG" : "BEHIND";
       $("roleText").textContent = "";
