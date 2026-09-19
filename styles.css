@@ -449,7 +449,8 @@ button:focus-visible {
 
 .banner[data-role="solo"] { border-color: var(--ahead); }
 .banner[data-role="ahead"],
-.banner[data-role="behind"] {
+.banner[data-role="behind"],
+.banner[data-role="tied"] {
   grid-template-columns: 1fr;
   padding: 20px 16px 18px;
 }
@@ -469,8 +470,13 @@ button:focus-visible {
   border-color: var(--behind);
 }
 
+.banner[data-role="tied"] {
+  border-color: var(--ahead);
+}
+
 .banner[data-role="ahead"] .banner-copy,
-.banner[data-role="behind"] .banner-copy {
+.banner[data-role="behind"] .banner-copy,
+.banner[data-role="tied"] .banner-copy {
   display: none;
 }
 
@@ -501,7 +507,8 @@ button:focus-visible {
 }
 
 .banner[data-role="ahead"] .role-hero,
-.banner[data-role="behind"] .role-hero {
+.banner[data-role="behind"] .role-hero,
+.banner[data-role="tied"] .role-hero {
   text-align: center;
 }
 
@@ -733,7 +740,7 @@ footer {
   box-shadow: var(--shadow);
 }
 
-@media (max-width: 800px) {
+@media (max-width: 1024px) {
   .wrap { width: min(1080px, calc(100% - 16px)); }
   .layout { grid-template-columns: 1fr; }
   .header-inner {

@@ -136,7 +136,9 @@ var ranked = sync.decorateParticipants(
 
 eq("sorts fastest first", ranked.map(function (p) { return p.name; }).join(","), "Sara,Alex,Tom");
 eq("leader is fastest", ranked[0].isLeader, true);
+eq("leader is at the live edge", ranked[0].atLiveEdge, true);
 eq("you are marked", ranked[1].isMe, true);
+eq("you are not at the live edge", ranked[1].atLiveEdge, false);
 eq("delta vs leader for you", ranked[1].deltaFromLeader, -5);
 eq("delta vs you for leader", ranked[0].deltaFromMe, 5);
 eq("tom lag vs leader", ranked[2].lagFromLeader, 15);
@@ -369,6 +371,31 @@ eq(
   sync.joinSeedHint(ahead).indexOf("live edge") !== -1,
   true
 );
+
+var tieNow = 50_000;
+var tiedRanked = sync.decorateParticipants([
+  {
+    userId: "sara",
+    name: "Sara",
+    matchSecondsAtAnchor: 200,
+    anchorTimestamp: tieNow - 400,
+    lastSeen: tieNow,
+    isPaused: false
+  },
+  {
+    userId: "me",
+    name: "Alex",
+    matchSecondsAtAnchor: 200,
+    anchorTimestamp: tieNow,
+    lastSeen: tieNow,
+    isPaused: false
+  }
+], "me", tieNow);
+eq("fractional leader can still share a displayed second", tiedRanked[0].name, "Sara");
+eq("displayed clocks match", tiedRanked[0].calculatedSeconds, tiedRanked[1].calculatedSeconds);
+eq("fractional leader is at live edge", tiedRanked[0].atLiveEdge, true);
+eq("same displayed second is also live edge", tiedRanked[1].atLiveEdge, true);
+eq("displayed delay is zero", tiedRanked[1].deltaFromLeader, 0);
 
 console.log("\n" + passed + " passed, " + failed + " failed");
 process.exit(failed ? 1 : 0);

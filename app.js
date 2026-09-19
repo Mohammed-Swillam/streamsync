@@ -651,7 +651,6 @@
     var list = rankedList(tickNow);
     var me = null;
     var leader = list[0] || null;
-    var next = list[1] || null;
     list.forEach(function (p) { if (p.isMe) me = p; });
     var mySecs = me ? me.calculatedSeconds : S.calculateCurrentSeconds(myRecord(), tickNow);
 
@@ -682,21 +681,21 @@
       heroLabel.textContent = "Invite friends";
       heroInvite.classList.remove("hidden");
       boardInvite.classList.add("hidden");
-    } else if (me && me.isLeader) {
-      var gapNext = next ? Math.abs(next.deltaFromLeader) : 0;
+    } else if (me && me.atLiveEdge) {
       var wait = me.spoilerWaitSeconds;
-      banner.dataset.role = "ahead";
-      $("roleTitle").textContent = "You are ahead";
-      $("roleTag").textContent = "AHEAD";
-      $("roleText").textContent = gapNext
-        ? "You are " + gapNext + "s ahead of " + next.name + ". Hold chat reactions."
+      $("roleTitle").textContent = wait ? "You are ahead" : "Tied";
+      $("roleTag").textContent = wait ? "AHEAD" : "TIED";
+      $("roleText").textContent = wait
+        ? "Hold chat until the slowest feed catches up."
         : "You are tied at the front of the room.";
       $("myRelative").textContent = wait ? ("Ahead of the slowest feed by " + wait + "s") : "Tied for the lead";
       if (wait > 0) {
+        banner.dataset.role = "ahead";
         heroLabel.textContent = "Hold chat reactions";
         heroValue.textContent = "Wait " + wait + "s";
         heroValue.classList.remove("hidden");
       } else {
+        banner.dataset.role = "tied";
         heroLabel.textContent = "Tied at the live edge";
       }
     } else if (me && leader) {
