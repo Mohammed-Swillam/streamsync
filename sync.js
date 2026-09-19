@@ -82,13 +82,36 @@
     return parseClockInputs(minutes, seconds);
   }
 
-  function calculateCurrentSeconds(participant, now) {
-    now = now || Date.now();
+  function calculateMatchTime(participant, now) {
+    now = now == null ? Date.now() : Number(now);
+    if (!isFinite(now)) now = Date.now();
     if (!participant) return 0;
     var matchAtAnchor = Math.max(0, Number(participant.matchSecondsAtAnchor) || 0);
-    if (participant.isPaused) return Math.floor(matchAtAnchor);
+    if (participant.isPaused) return matchAtAnchor;
     var elapsed = Math.max(0, (now - (Number(participant.anchorTimestamp) || now)) / 1000);
-    return Math.floor(matchAtAnchor + elapsed);
+    return matchAtAnchor + elapsed;
+  }
+
+  function calculateCurrentSeconds(participant, now) {
+    return Math.floor(calculateMatchTime(participant, now));
+  }
+
+  function alignNowToDisplayedSecond(participant, now) {
+    now = now == null ? Date.now() : Number(now);
+    if (!isFinite(now)) now = Date.now();
+    if (!participant || participant.isPaused) {
+      return Math.floor(now / 1000) * 1000;
+    }
+    var matchAtAnchor = Math.max(0, Number(participant.matchSecondsAtAnchor) || 0);
+    var anchor = Number(participant.anchorTimestamp) || now;
+    var displayed = Math.floor(calculateMatchTime(participant, now));
+    return anchor + (displayed - matchAtAnchor) * 1000;
+  }
+
+  function roundSignedSeconds(delta) {
+    var n = Number(delta);
+    if (!isFinite(n)) return 0;
+    return Math.round(n);
   }
 
   function sanitizeRoomCode(code) {
@@ -225,6 +248,7 @@
     var list = [];
     (participants || []).forEach(function (p) {
       if (!p || p.left || (p.userId !== myUserId && shouldDrop(p, now))) return;
+      var matchTime = calculateMatchTime(p, now);
       list.push({
         userId: p.userId,
         name: p.name,
@@ -232,21 +256,22 @@
         anchorTimestamp: p.anchorTimestamp,
         isPaused: !!p.isPaused,
         lastSeen: p.lastSeen,
-        calculatedSeconds: calculateCurrentSeconds(p, now),
+        matchTime: matchTime,
+        calculatedSeconds: Math.floor(matchTime),
         isMe: p.userId === myUserId,
         online: p.userId === myUserId ? true : isOnline(p, now)
       });
     });
 
     list.sort(function (a, b) {
-      if (b.calculatedSeconds !== a.calculatedSeconds) {
-        return b.calculatedSeconds - a.calculatedSeconds;
+      if (b.matchTime !== a.matchTime) {
+        return b.matchTime - a.matchTime;
       }
       if (a.isMe !== b.isMe) return a.isMe ? -1 : 1;
       return String(a.name).localeCompare(String(b.name));
     });
 
-    var leaderSecs = list.length ? list[0].calculatedSeconds : 0;
+    var leaderTime = list.length ? list[0].matchTime : 0;
     var me = null;
     for (var i = 0; i < list.length; i++) {
       if (list[i].isMe) {
@@ -254,11 +279,12 @@
         break;
       }
     }
-    var mySecs = me ? me.calculatedSeconds : 0;
-    var slowestSecs = list.length ? list[list.length - 1].calculatedSeconds : 0;
+    var myTime = me ? me.matchTime : 0;
+    var slowestTime = list.length ? list[list.length - 1].matchTime : 0;
 
     return list.map(function (p, index) {
-      var deltaFromLeader = p.calculatedSeconds - leaderSecs;
+      var deltaFromLeader = roundSignedSeconds(p.matchTime - leaderTime);
+      var deltaFromMe = roundSignedSeconds(p.matchTime - myTime);
       return {
         userId: p.userId,
         name: p.name,
@@ -270,10 +296,10 @@
         rank: index + 1,
         isLeader: index === 0,
         deltaFromLeader: deltaFromLeader,
-        deltaFromMe: p.calculatedSeconds - mySecs,
+        deltaFromMe: deltaFromMe,
         lagFromLeader: Math.abs(deltaFromLeader),
         bucket: delayBucket(deltaFromLeader),
-        spoilerWaitSeconds: leaderSecs - slowestSecs
+        spoilerWaitSeconds: roundSignedSeconds(leaderTime - slowestTime)
       };
     });
   }
@@ -395,7 +421,10 @@
     stepClock: stepClock,
     parseTypedClock: parseTypedClock,
     MAX_MINUTES: MAX_MINUTES,
+    calculateMatchTime: calculateMatchTime,
     calculateCurrentSeconds: calculateCurrentSeconds,
+    alignNowToDisplayedSecond: alignNowToDisplayedSecond,
+    roundSignedSeconds: roundSignedSeconds,
     sanitizeRoomCode: sanitizeRoomCode,
     sanitizeName: sanitizeName,
     randomRoomCode: randomRoomCode,

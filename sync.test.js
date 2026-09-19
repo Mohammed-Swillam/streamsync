@@ -132,6 +132,49 @@ eq("slight bucket at 15s", ranked[2].bucket, "slight");
 eq("edge bucket", ranked[0].bucket, "edge");
 eq("16s is delayed", sync.delayBucket(-16), "delayed");
 
+var staggerT0 = 10_000;
+var staggerViewers = [
+  {
+    userId: "sara",
+    name: "Sara",
+    matchSecondsAtAnchor: 100,
+    anchorTimestamp: staggerT0,
+    lastSeen: staggerT0 + 2000,
+    isPaused: false
+  },
+  {
+    userId: "me",
+    name: "Alex",
+    matchSecondsAtAnchor: 95,
+    anchorTimestamp: staggerT0 - 400,
+    lastSeen: staggerT0 + 2000,
+    isPaused: false
+  }
+];
+var earlyRanked = sync.decorateParticipants(staggerViewers, "me", staggerT0 + 100);
+var lateRanked = sync.decorateParticipants(staggerViewers, "me", staggerT0 + 600);
+var earlyMe = earlyRanked.filter(function (p) { return p.isMe; })[0];
+var lateMe = lateRanked.filter(function (p) { return p.isMe; })[0];
+eq(
+  "staggered floors would disagree",
+  sync.calculateCurrentSeconds(staggerViewers[1], staggerT0 + 100) -
+    sync.calculateCurrentSeconds(staggerViewers[0], staggerT0 + 100) !==
+    sync.calculateCurrentSeconds(staggerViewers[1], staggerT0 + 600) -
+      sync.calculateCurrentSeconds(staggerViewers[0], staggerT0 + 600),
+  true
+);
+eq("leaderboard delta ignores floor flicker", earlyMe.deltaFromLeader, lateMe.deltaFromLeader);
+eq("leaderboard delta stays the raw gap", earlyMe.deltaFromLeader, -5);
+
+var meClock = {
+  matchSecondsAtAnchor: 54,
+  anchorTimestamp: 20_000,
+  isPaused: false
+};
+eq("displayed-second align pins to clock rollover", sync.alignNowToDisplayedSecond(meClock, 20_640), 20_000);
+eq("displayed-second align holds through the same second", sync.alignNowToDisplayedSecond(meClock, 20_999), 20_000);
+eq("displayed-second align steps with the main clock", sync.alignNowToDisplayedSecond(meClock, 21_000), 21_000);
+
 eq("signed format ahead", sync.formatSignedSeconds(12), "+12s");
 eq("signed format behind", sync.formatSignedSeconds(-7), "-7s");
 eq("ntfy topic from room", sync.ntfyTopic("DERBY-7K3Q"), "ssfc_derby-7k3q");
