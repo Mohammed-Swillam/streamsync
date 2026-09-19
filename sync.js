@@ -114,7 +114,12 @@
     var stamp = clampInt(raw, 0, STAMP_MS_MAX, 0);
     if (!stamp) return 0;
     if (stamp < STAMP_MS_MIN) stamp *= 1000;
+    if (stamp > STAMP_MS_MAX) return STAMP_MS_MAX;
     return stamp;
+  }
+
+  function decodeMillis(raw) {
+    return clampInt(raw, 0, STAMP_MS_MAX, 0);
   }
 
   function sanitizeRoomCode(code) {
@@ -174,7 +179,15 @@
     var anchorMs = Math.floor(Number(participant.anchorTimestamp) || now);
     var paused = participant && participant.isPaused ? 1 : 0;
     var seenMs = Math.floor(now);
-    return [name, matchSecs, anchorMs, paused, seenMs].join("|");
+    return [
+      name,
+      matchSecs,
+      Math.floor(anchorMs / 1000),
+      paused,
+      Math.floor(seenMs / 1000),
+      anchorMs,
+      seenMs
+    ].join("|");
   }
 
   function decodeViewer(userId, raw) {
@@ -187,9 +200,11 @@
     var name = sanitizeName(parts[0]);
     if (!name) return null;
     var matchSecs = clampInt(parts[1], 0, 200 * 60, 0);
-    var anchorMs = decodeStamp(parts[2]);
+    var anchorMs = parts.length > 5 ? decodeMillis(parts[5]) : decodeStamp(parts[2]);
     if (!anchorMs) return null;
-    var seenMs = parts.length > 4 ? decodeStamp(parts[4]) : anchorMs;
+    var seenMs = parts.length > 6
+      ? decodeMillis(parts[6])
+      : (parts.length > 4 ? decodeStamp(parts[4]) : anchorMs);
     if (!seenMs) seenMs = anchorMs;
     return {
       userId: userId,

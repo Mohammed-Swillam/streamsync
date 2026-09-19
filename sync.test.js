@@ -69,17 +69,18 @@ var encoded = sync.encodeViewer(
   {
     name: "Sara",
     matchSecondsAtAnchor: 660,
-    anchorTimestamp: 1789591008000,
+    anchorTimestamp: 1789591008123,
     isPaused: false
   },
-  1789591012000
+  1789591012456
 );
-eq("encode viewer compact string", encoded, "Sara|660|1789591008000|0|1789591012000");
+eq("encode keeps legacy seconds for old clients", encoded, "Sara|660|1789591008|0|1789591012|1789591008123|1789591012456");
 
 var decoded = sync.decodeViewer("abc12345", encoded);
 eq("decode name", decoded.name, "Sara");
 eq("decode match seconds", decoded.matchSecondsAtAnchor, 660);
-eq("decode keeps millisecond anchor", decoded.anchorTimestamp, 1789591008000);
+eq("decode keeps millisecond anchor", decoded.anchorTimestamp, 1789591008123);
+eq("decode keeps millisecond lastSeen", decoded.lastSeen, 1789591012456);
 eq("decode paused", decoded.isPaused, false);
 eq("decode leftover flag", decoded.left, false);
 eq("left tombstone", sync.decodeViewer("abc12345", "LEFT").left, true);
@@ -88,6 +89,15 @@ eq("reject empty name", sync.decodeViewer("abc12345", "|1|1|0"), null);
 var legacy = sync.decodeViewer("abc12345", "Sara|660|1789591008|0|1789591012");
 eq("legacy second stamps still decode", legacy.anchorTimestamp, 1789591008000);
 eq("legacy seen stamp still decodes", legacy.lastSeen, 1789591012000);
+var msOnly = sync.decodeViewer("abc12345", "Sara|660|1789591008123|0|1789591012456");
+eq("transitional millisecond field 2 still decodes", msOnly.anchorTimestamp, 1789591008123);
+eq(
+  "legacy conversion is clamped after * 1000",
+  sync.decodeViewer("abc12345", "Sara|1|99999999999|0|1").anchorTimestamp,
+  40000000000000
+);
+var oldClientFields = encoded.split("|").slice(0, 5).join("|");
+eq("old clients still see second-sized stamps", oldClientFields, "Sara|660|1789591008|0|1789591012");
 
 eq("roster unique", sync.encodeRoster(["aa", "bb", "aa", ""]), "aa,bb");
 eq("roster decode", sync.decodeRoster("aa,bb,aa").join(","), "aa,bb");
