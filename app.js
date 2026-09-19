@@ -253,8 +253,12 @@
 
   function updateSoundButton() {
     var btn = $("soundToggleBtn");
-    btn.textContent = state.soundEnabled ? "Sound on" : "Sound off";
-    btn.setAttribute("aria-pressed", state.soundEnabled ? "true" : "false");
+    var on = !!state.soundEnabled;
+    btn.classList.toggle("is-on", on);
+    btn.setAttribute("aria-pressed", on ? "true" : "false");
+    btn.setAttribute("aria-label", on ? "Sound on" : "Sound off");
+    var label = btn.querySelector(".header-tool-label");
+    if (label) label.textContent = on ? "Sound on" : "Sound off";
   }
 
   function setNetState(next) {
@@ -262,7 +266,7 @@
     var chip = $("syncStatus");
     chip.dataset.state = next;
     chip.classList.add("is-visible");
-    chip.textContent = next === "live" ? "Live sync" : next === "degraded" ? "Sync weak" : "Local only";
+    chip.textContent = next === "live" ? "Live" : next === "degraded" ? "Weak" : "Local";
   }
 
   function myRecord() {
@@ -647,7 +651,6 @@
     var list = rankedList(tickNow);
     var me = null;
     var leader = list[0] || null;
-    var next = list[1] || null;
     list.forEach(function (p) { if (p.isMe) me = p; });
     var mySecs = me ? me.calculatedSeconds : S.calculateCurrentSeconds(myRecord(), tickNow);
 
@@ -659,38 +662,54 @@
     $("participantCount").textContent = list.length + (list.length === 1 ? " viewer" : " viewers");
 
     var banner = $("roleBanner");
-    var caution = $("cautionBox");
+    var heroValue = $("roleHeroValue");
+    var heroLabel = $("roleHeroLabel");
+    var heroInvite = $("heroInviteBtn");
+    var boardInvite = $("inviteFriendsBtn");
+    heroValue.classList.add("hidden");
+    heroInvite.classList.add("hidden");
+    boardInvite.classList.remove("hidden");
+    $("roleText").classList.remove("hidden");
+    delete banner.dataset.lag;
+
     if (list.length <= 1) {
       banner.dataset.role = "solo";
       $("roleTitle").textContent = "Room ready";
       $("roleTag").textContent = "SOLO";
-      $("roleText").textContent = "Share the link. Friends enter the clock on their own TV.";
+      $("roleText").textContent = "Send the link. Friends type the clock on their TV.";
       $("myRelative").textContent = "Waiting for the group";
-      caution.classList.add("hidden");
-    } else if (me && me.isLeader) {
-      var gapNext = next ? Math.abs(next.deltaFromLeader) : 0;
+      heroLabel.textContent = "Invite friends";
+      heroInvite.classList.remove("hidden");
+      boardInvite.classList.add("hidden");
+    } else if (me && me.atLiveEdge) {
       var wait = me.spoilerWaitSeconds;
-      banner.dataset.role = "ahead";
-      $("roleTitle").textContent = "You have the live edge";
-      $("roleTag").textContent = "AHEAD";
-      $("roleText").textContent = gapNext
-        ? "You are " + gapNext + "s ahead of " + next.name + ". Hold chat reactions."
+      $("roleTitle").textContent = wait ? "You are ahead" : "Tied";
+      $("roleTag").textContent = wait ? "AHEAD" : "TIED";
+      $("roleText").textContent = wait
+        ? "Hold chat until the slowest feed catches up."
         : "You are tied at the front of the room.";
       $("myRelative").textContent = wait ? ("Ahead of the slowest feed by " + wait + "s") : "Tied for the lead";
       if (wait > 0) {
-        caution.classList.remove("hidden");
-        $("cautionValue").textContent = wait + "s";
+        banner.dataset.role = "ahead";
+        heroLabel.textContent = "Hold chat reactions";
+        heroValue.textContent = "Wait " + wait + "s";
+        heroValue.classList.remove("hidden");
       } else {
-        caution.classList.add("hidden");
+        banner.dataset.role = "tied";
+        heroLabel.textContent = "Tied at the live edge";
       }
     } else if (me && leader) {
       var lag = Math.abs(me.deltaFromLeader);
       banner.dataset.role = "behind";
-      $("roleTitle").textContent = "Your feed is delayed by " + lag + "s";
+      banner.dataset.lag = lag > 15 ? "high" : "mild";
+      $("roleTitle").textContent = "You are behind";
       $("roleTag").textContent = lag > 15 ? "HIGH LAG" : "BEHIND";
-      $("roleText").textContent = leader.name + " is " + lag + "s ahead of you. Glance away from group chat on big moments.";
+      $("roleText").textContent = "";
+      $("roleText").classList.add("hidden");
       $("myRelative").textContent = S.formatSignedSeconds(me.deltaFromLeader) + " vs " + leader.name;
-      caution.classList.add("hidden");
+      heroLabel.textContent = "behind " + leader.name;
+      heroValue.textContent = lag + "s";
+      heroValue.classList.remove("hidden");
     }
 
     renderLeaderboard(list);
@@ -804,8 +823,11 @@
     $("welcomeView").classList.add("hidden");
     $("dashboardView").classList.remove("hidden");
     $("exitRoomBtn").classList.remove("hidden");
+    window.scrollTo(0, 0);
+    document.body.classList.add("in-room");
     $("roomChip").classList.add("is-visible");
     $("roomCodeLabel").textContent = state.roomId;
+    $("copyInviteBtn").setAttribute("aria-label", "Open invite for room " + state.roomId);
     $("syncStatus").classList.add("is-visible");
 
     var url = new URL(window.location.href);
@@ -832,6 +854,8 @@
     $("exitRoomBtn").classList.add("hidden");
     $("roomChip").classList.remove("is-visible");
     $("syncStatus").classList.remove("is-visible");
+    $("copyInviteBtn").removeAttribute("aria-label");
+    document.body.classList.remove("in-room");
     closeModal("exactModal");
     closeModal("inviteModal");
     var url = new URL(window.location.href);
@@ -911,21 +935,12 @@
       });
     });
 
-    document.querySelectorAll(".presetBtn").forEach(function (btn) {
-      btn.addEventListener("click", function () {
-        var seconds = parseInt(btn.getAttribute("data-preset"), 10);
-        state.matchSecondsAtAnchor = seconds;
-        state.anchorTimestamp = Date.now();
-        publishMe();
-        showToast("Clock set to " + S.formatMatchSeconds(seconds));
-      });
-    });
-
     $("pauseBtn").addEventListener("click", togglePause);
-    $("openExactBtn").addEventListener("click", function () {
+    function openExact() {
       exactClock.set(S.calculateCurrentSeconds(myRecord()));
       openModal("exactModal");
-    });
+    }
+    $("clockTapBtn").addEventListener("click", openExact);
     $("saveExactBtn").addEventListener("click", function () {
       var picked = S.splitClock(exactClock.get());
       setExact(picked.minutes, picked.seconds);
@@ -940,6 +955,7 @@
       openModal("inviteModal");
     }
     $("inviteFriendsBtn").addEventListener("click", openInvite);
+    $("heroInviteBtn").addEventListener("click", openInvite);
     $("copyInviteBtn").addEventListener("click", openInvite);
     $("closeInviteBtn").addEventListener("click", function () {
       closeModal("inviteModal");

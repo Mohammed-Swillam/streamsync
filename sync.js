@@ -313,6 +313,7 @@
         online: p.online,
         rank: index + 1,
         isLeader: index === 0,
+        atLiveEdge: deltaFromLeader === 0,
         deltaFromLeader: deltaFromLeader,
         deltaFromMe: p.calculatedSeconds - mySecs,
         lagFromLeader: Math.abs(deltaFromLeader),
