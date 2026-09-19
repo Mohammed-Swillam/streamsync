@@ -258,7 +258,11 @@ eq("signed format ahead", sync.formatSignedSeconds(12), "+12s");
 eq("signed format behind", sync.formatSignedSeconds(-7), "-7s");
 eq("ntfy topic from room", sync.ntfyTopic("DERBY-7K3Q"), "ssfc_derby-7k3q");
 eq("kv user key", sync.roomKeys("DERBY-7K3Q").user("ab12cd34"), "ssfcU-DERBY-7K3Q-ab12cd34");
+eq("kv meta key", sync.roomKeys("DERBY-7K3Q").meta, "ssfcM-DERBY-7K3Q");
 eq("escape html", sync.escapeHtml('<img src=x onerror="alert(1)">'), "&lt;img src=x onerror=&quot;alert(1)&quot;&gt;");
+
+eq("stale drop is 45 minutes", sync.STALE_DROP_MS, 45 * 60 * 1000);
+eq("room max age is 3 hours", sync.ROOM_MAX_AGE_MS, 3 * 60 * 60 * 1000);
 
 var dropped = sync.decorateParticipants(
   [
@@ -280,7 +284,112 @@ var dropped = sync.decorateParticipants(
   "me",
   now
 );
-eq("drops abandoned viewers after 4h", dropped.length, 1);
+eq("drops abandoned viewers after 45 minutes", dropped.length, 1);
+
+var keptLastReport = sync.decorateParticipants(
+  [
+    {
+      userId: "ghost",
+      name: "Old",
+      matchSecondsAtAnchor: 10,
+      anchorTimestamp: now - sync.STALE_DROP_MS + 1000,
+      lastSeen: now - sync.STALE_DROP_MS + 1000
+    },
+    {
+      userId: "me",
+      name: "Alex",
+      matchSecondsAtAnchor: 10,
+      anchorTimestamp: now,
+      lastSeen: now
+    }
+  ],
+  "me",
+  now
+);
+eq("keeps last report until 45 minutes", keptLastReport.length, 2);
+eq("kept last report is offline", keptLastReport.filter(function (p) { return p.userId === "ghost"; })[0].online, false);
+
+var ghostAheadT = 5_000_000;
+var ghostAheadBoard = sync.decorateParticipants(
+  [
+    {
+      userId: "ghost",
+      name: "Tom",
+      matchSecondsAtAnchor: 100,
+      anchorTimestamp: ghostAheadT - 60 * 1000,
+      lastSeen: ghostAheadT - 60 * 1000,
+      isPaused: false
+    },
+    {
+      userId: "me",
+      name: "Alex",
+      matchSecondsAtAnchor: 110,
+      anchorTimestamp: ghostAheadT,
+      lastSeen: ghostAheadT,
+      isPaused: false
+    }
+  ],
+  "me",
+  ghostAheadT
+);
+var ghostRow = ghostAheadBoard.filter(function (p) { return p.userId === "ghost"; })[0];
+var meRow = ghostAheadBoard.filter(function (p) { return p.isMe; })[0];
+eq("ghost stays on the board as last report", ghostAheadBoard.length, 2);
+eq("ghost clock freezes at last report", ghostRow.calculatedSeconds, 100);
+eq("ticking ghost would have been ahead", 100 + 60 > 110, true);
+eq("you stay at the live edge without the ghost", meRow.atLiveEdge, true);
+eq("you are the live leader", meRow.isLeader, true);
+eq("ghost does not take the live edge", ghostRow.isLeader, false);
+eq("ghost does not set Wait", meRow.spoilerWaitSeconds, 0);
+eq("online people sort ahead of ghosts", ghostAheadBoard.map(function (p) { return p.userId; }).join(","), "me,ghost");
+
+var ghostWaitBoard = sync.decorateParticipants(
+  [
+    {
+      userId: "slow-ghost",
+      name: "Tom",
+      matchSecondsAtAnchor: 50,
+      anchorTimestamp: ghostAheadT,
+      lastSeen: ghostAheadT - 60 * 1000,
+      isPaused: false
+    },
+    {
+      userId: "fast",
+      name: "Sara",
+      matchSecondsAtAnchor: 80,
+      anchorTimestamp: ghostAheadT,
+      lastSeen: ghostAheadT,
+      isPaused: false
+    },
+    {
+      userId: "me",
+      name: "Alex",
+      matchSecondsAtAnchor: 80,
+      anchorTimestamp: ghostAheadT,
+      lastSeen: ghostAheadT,
+      isPaused: false
+    }
+  ],
+  "me",
+  ghostAheadT
+);
+eq("live Wait ignores a slower ghost", ghostWaitBoard[0].spoilerWaitSeconds, 0);
+eq("tied online viewers stay at the live edge", ghostWaitBoard.filter(function (p) { return p.isMe; })[0].atLiveEdge, true);
+
+var encodedMeta = sync.encodeRoomMeta({ createdAt: 1700000000000 });
+eq("encode room createdAt", encodedMeta, "1700000000000");
+eq("decode room createdAt", sync.decodeRoomMeta(encodedMeta).createdAt, 1700000000000);
+eq("missing room meta is not expired", sync.roomIsExpired(null, ghostAheadT), false);
+eq(
+  "room is still open at 3 hours",
+  sync.roomIsExpired({ createdAt: ghostAheadT }, ghostAheadT + sync.ROOM_MAX_AGE_MS),
+  false
+);
+eq(
+  "room expires after 3 hours",
+  sync.roomIsExpired({ createdAt: ghostAheadT }, ghostAheadT + sync.ROOM_MAX_AGE_MS + 1),
+  true
+);
 
 var savedAt = 1_700_000_000_000;
 var session = sync.buildSession(
@@ -376,6 +485,30 @@ eq(
   sync.joinSeedHint(ahead).indexOf("live edge") !== -1,
   true
 );
+
+var seededFromLive = sync.pickRoomLeader(
+  [
+    {
+      userId: "ghost",
+      name: "Old",
+      matchSecondsAtAnchor: 2000,
+      anchorTimestamp: now - 60 * 1000,
+      lastSeen: now - 60 * 1000,
+      isPaused: false
+    },
+    {
+      userId: "live",
+      name: "Sara",
+      matchSecondsAtAnchor: 1800,
+      anchorTimestamp: now,
+      lastSeen: now,
+      isPaused: false
+    }
+  ],
+  now
+);
+eq("join seed prefers an online viewer over a ghost", seededFromLive.name, "Sara");
+eq("join seed viewerCount ignores ghosts when someone is live", seededFromLive.viewerCount, 1);
 
 var tieNow = 50_000;
 var tiedRanked = sync.decorateParticipants([

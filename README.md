@@ -38,6 +38,8 @@ The first `index.html` in this repo looked finished, but it did not solve the ac
 - Names, toasts, and leaderboard rows do not use unsanitized HTML.
 - WhatsApp and Telegram open real share URLs.
 - Refreshing the page restores the same person, room, and match clock from localStorage.
+- Someone who has not opened the app for 45 minutes drops off. People who are briefly away stay on the board as last report and do not set Wait or behind.
+- A room created more than 3 hours ago is cleared. Anyone still in it is sent back to the join screen.
 - Unit tests cover clock math, sorting, and encode/decode.
 
 ## How to use it
