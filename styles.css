@@ -709,6 +709,7 @@ footer {
   justify-content: center;
   padding: 16px;
   z-index: 20;
+  cursor: pointer;
 }
 
 .modal.is-open { display: flex; }
@@ -718,6 +719,7 @@ footer {
   background: var(--panel);
   border: 1px solid var(--line);
   padding: 18px;
+  cursor: default;
 }
 
 .modal-card h3 { margin: 0 0 8px; }
