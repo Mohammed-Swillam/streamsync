@@ -8,6 +8,9 @@
   --ahead: #b6ff3b;
   --behind: #ffce47;
   --danger: #ff6b4a;
+  --wait-low: #ffce47;
+  --wait-mid: #ff8c2a;
+  --wait-high: #ff6b4a;
   --you: #9ad7ff;
   --shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
   font-family: "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
@@ -457,7 +460,17 @@ button:focus-visible {
 
 .banner[data-role="ahead"] {
   background: #2a160f;
-  border-color: var(--danger);
+  border-color: var(--wait-high);
+}
+
+.banner[data-role="ahead"][data-wait="low"] {
+  background: #241e0c;
+  border-color: var(--wait-low);
+}
+
+.banner[data-role="ahead"][data-wait="mid"] {
+  background: #2a180a;
+  border-color: var(--wait-mid);
 }
 
 .banner[data-role="behind"] {
@@ -535,7 +548,9 @@ button:focus-visible {
   letter-spacing: 0.02em;
 }
 
-.banner[data-role="ahead"] .role-hero-value { color: var(--danger); }
+.banner[data-role="ahead"] .role-hero-value { color: var(--wait-high); }
+.banner[data-role="ahead"][data-wait="low"] .role-hero-value { color: var(--wait-low); }
+.banner[data-role="ahead"][data-wait="mid"] .role-hero-value { color: var(--wait-mid); }
 .banner[data-role="behind"] .role-hero-value { color: var(--behind); }
 
 .role-hero .primary {

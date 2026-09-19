@@ -671,6 +671,7 @@
     boardInvite.classList.remove("hidden");
     $("roleText").classList.remove("hidden");
     delete banner.dataset.lag;
+    delete banner.dataset.wait;
 
     if (list.length <= 1) {
       banner.dataset.role = "solo";
@@ -691,6 +692,7 @@
       $("myRelative").textContent = wait ? ("Ahead of the slowest feed by " + wait + "s") : "Tied for the lead";
       if (wait > 0) {
         banner.dataset.role = "ahead";
+        banner.dataset.wait = S.waitSeverity(wait);
         heroLabel.textContent = "Hold chat reactions";
         heroValue.textContent = "Wait " + wait + "s";
         heroValue.classList.remove("hidden");
