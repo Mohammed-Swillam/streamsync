@@ -11,22 +11,33 @@
 <body>
   <header>
     <div class="wrap header-inner">
-      <div class="brand">
-        <div class="mark" aria-hidden="true">SS</div>
-        <div>
-          <h1>StreamSync</h1>
-          <p>Broadcast delay meter for football nights</p>
+      <div class="header-left">
+        <div class="brand">
+          <div class="mark" aria-hidden="true">SS</div>
+          <div class="brand-copy">
+            <h1>StreamSync</h1>
+            <p>Broadcast delay meter for football nights</p>
+          </div>
+        </div>
+        <div id="roomChip" class="room-chip">
+          <button id="copyInviteBtn" class="room-chip-btn" type="button" aria-label="Open invite">
+            <span class="room-kicker">Room</span>
+            <strong id="roomCodeLabel" class="mono">—</strong>
+          </button>
         </div>
       </div>
       <div class="header-actions">
         <div id="syncStatus" class="status-chip" data-state="offline">Offline</div>
-        <div id="roomChip" class="room-chip">
-          <span>Room</span>
-          <strong id="roomCodeLabel" class="mono">—</strong>
-          <button id="copyInviteBtn" class="ghost" type="button">Copy link</button>
-        </div>
-        <button id="soundToggleBtn" class="ghost" type="button" aria-pressed="false">Sound off</button>
-        <button id="exitRoomBtn" class="ghost hidden" type="button">Exit</button>
+        <button id="soundToggleBtn" class="ghost header-tool" type="button" aria-pressed="false" aria-label="Sound off">
+          <svg class="icon icon-sound-off" viewBox="0 0 24 24" aria-hidden="true">
+            <path fill="currentColor" d="M5 9v6h3.2L14 20V4L8.2 9H5zm10.8 3 2.1 2.1-1.1 1.1-2.1-2.1-2.1 2.1-1.1-1.1 2.1-2.1-2.1-2.1 1.1-1.1 2.1 2.1 2.1-2.1 1.1 1.1-2.1 2.1z"/>
+          </svg>
+          <svg class="icon icon-sound-on" viewBox="0 0 24 24" aria-hidden="true">
+            <path fill="currentColor" d="M5 9v6h3.2L14 20V4L8.2 9H5zm10.2.3c1.1.6 1.8 1.7 1.8 3.2s-.7 2.6-1.8 3.2V9.3zM15.2 6v1.7c2.4.8 4.1 3 4.1 5.6s-1.7 4.8-4.1 5.6V19c3.3-.9 5.8-3.9 5.8-7.3S18.5 6.9 15.2 6z"/>
+          </svg>
+          <span class="header-tool-label">Sound off</span>
+        </button>
+        <button id="exitRoomBtn" class="ghost header-tool hidden" type="button">Exit</button>
       </div>
     </div>
   </header>

@@ -253,8 +253,12 @@
 
   function updateSoundButton() {
     var btn = $("soundToggleBtn");
-    btn.textContent = state.soundEnabled ? "Sound on" : "Sound off";
-    btn.setAttribute("aria-pressed", state.soundEnabled ? "true" : "false");
+    var on = !!state.soundEnabled;
+    btn.classList.toggle("is-on", on);
+    btn.setAttribute("aria-pressed", on ? "true" : "false");
+    btn.setAttribute("aria-label", on ? "Sound on" : "Sound off");
+    var label = btn.querySelector(".header-tool-label");
+    if (label) label.textContent = on ? "Sound on" : "Sound off";
   }
 
   function setNetState(next) {
@@ -262,7 +266,7 @@
     var chip = $("syncStatus");
     chip.dataset.state = next;
     chip.classList.add("is-visible");
-    chip.textContent = next === "live" ? "Live sync" : next === "degraded" ? "Sync weak" : "Local only";
+    chip.textContent = next === "live" ? "Live" : next === "degraded" ? "Weak" : "Local";
   }
 
   function myRecord() {
@@ -819,6 +823,7 @@
     $("dashboardView").classList.remove("hidden");
     $("exitRoomBtn").classList.remove("hidden");
     window.scrollTo(0, 0);
+    document.body.classList.add("in-room");
     $("roomChip").classList.add("is-visible");
     $("roomCodeLabel").textContent = state.roomId;
     $("syncStatus").classList.add("is-visible");
@@ -847,6 +852,7 @@
     $("exitRoomBtn").classList.add("hidden");
     $("roomChip").classList.remove("is-visible");
     $("syncStatus").classList.remove("is-visible");
+    document.body.classList.remove("in-room");
     closeModal("exactModal");
     closeModal("inviteModal");
     var url = new URL(window.location.href);

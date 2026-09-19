@@ -61,10 +61,18 @@ header {
   padding: 12px 0;
 }
 
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
 .brand {
   display: flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
 }
 
 .mark {
@@ -76,6 +84,7 @@ header {
   color: #12200c;
   font-weight: 800;
   letter-spacing: -0.04em;
+  flex-shrink: 0;
 }
 
 .brand h1 {
@@ -95,18 +104,13 @@ header {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+  flex-shrink: 0;
 }
 
 .room-chip, .status-chip {
   display: none;
   align-items: center;
   gap: 8px;
-  border: 1px solid var(--line);
-  background: var(--panel);
-  padding: 6px 10px;
-  font-size: 0.8rem;
 }
 
 .room-chip.is-visible,
@@ -114,9 +118,69 @@ header {
   display: flex;
 }
 
+.room-chip {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  padding: 4px 4px 4px 10px;
+}
+
+.room-chip-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 4px 8px;
+  min-height: 36px;
+  font: inherit;
+}
+
+.room-kicker {
+  color: var(--muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.status-chip {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  padding: 6px 10px;
+  font-size: 0.8rem;
+}
+
+.status-chip::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 8px currentColor;
+  flex-shrink: 0;
+}
+
 .status-chip[data-state="live"] { color: var(--ahead); }
 .status-chip[data-state="degraded"] { color: var(--behind); }
 .status-chip[data-state="offline"] { color: var(--danger); }
+
+.header-tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+}
+
+.header-tool .icon {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
+.header-tool .icon-sound-on { display: none; }
+.header-tool.is-on .icon-sound-off { display: none; }
+.header-tool.is-on .icon-sound-on { display: block; }
 
 main {
   padding: 22px 0 48px;
@@ -634,16 +698,68 @@ footer {
 }
 
 @media (max-width: 800px) {
+  .wrap { width: min(1080px, calc(100% - 16px)); }
   .layout { grid-template-columns: 1fr; }
   .header-inner {
     align-items: center;
+    gap: 8px;
     padding: 8px 0;
+    flex-wrap: nowrap;
   }
+  .header-left { gap: 8px; flex: 1; min-width: 0; }
+  .mark { width: 30px; height: 30px; font-size: 0.72rem; }
   .brand p { display: none; }
-  .header-actions { gap: 6px; }
-  .room-chip .ghost { display: none; }
+  body.in-room .brand-copy { display: none; }
+  .header-actions {
+    gap: 4px;
+    flex-wrap: nowrap;
+  }
+  .room-chip {
+    border: 0;
+    background: transparent;
+    padding: 0;
+    min-width: 0;
+  }
+  .room-chip-btn {
+    padding: 0;
+    min-height: 30px;
+    gap: 0;
+  }
+  .room-kicker { display: none; }
+  .room-chip strong {
+    display: block;
+    max-width: 42vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.84rem;
+    letter-spacing: 0.04em;
+  }
+  .status-chip {
+    border: 0;
+    background: transparent;
+    padding: 0 4px;
+    min-height: 40px;
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    gap: 6px;
+    white-space: nowrap;
+  }
+  .header-tool {
+    width: 40px;
+    min-height: 40px;
+    padding: 0;
+  }
+  .header-tool-label,
+  #exitRoomBtn.header-tool {
+    width: auto;
+    padding: 0 10px;
+    font-size: 0.78rem;
+  }
+  .header-tool-label { display: none; }
   .banner { grid-template-columns: 1fr; }
   .role-hero { order: -1; text-align: left; }
   .banner[data-role="solo"] .role-hero { text-align: left; }
-  main { padding: 12px 0 36px; }
+  main { padding: 10px 0 32px; }
 }
