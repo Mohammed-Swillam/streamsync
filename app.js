@@ -696,9 +696,9 @@
     } else if (me && leader) {
       var lag = Math.abs(me.deltaFromLeader);
       banner.dataset.role = "behind";
-      $("roleTitle").textContent = "Don't open the group chat";
+      $("roleTitle").textContent = "You are behind";
       $("roleTag").textContent = lag > 15 ? "HIGH LAG" : "BEHIND";
-      $("roleText").textContent = leader.name + " is " + lag + "s ahead of you.";
+      $("roleText").textContent = "You are " + lag + "s behind " + leader.name + ".";
       $("myRelative").textContent = S.formatSignedSeconds(me.deltaFromLeader) + " vs " + leader.name;
       heroLabel.textContent = "behind " + leader.name;
       heroValue.textContent = lag + "s";
