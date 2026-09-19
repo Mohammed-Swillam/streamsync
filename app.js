@@ -666,6 +666,7 @@
     heroValue.classList.add("hidden");
     heroInvite.classList.add("hidden");
     boardInvite.classList.remove("hidden");
+    $("roleText").classList.remove("hidden");
 
     if (list.length <= 1) {
       banner.dataset.role = "solo";
@@ -698,7 +699,8 @@
       banner.dataset.role = "behind";
       $("roleTitle").textContent = "You are behind";
       $("roleTag").textContent = lag > 15 ? "HIGH LAG" : "BEHIND";
-      $("roleText").textContent = "You are " + lag + "s behind " + leader.name + ".";
+      $("roleText").textContent = "";
+      $("roleText").classList.add("hidden");
       $("myRelative").textContent = S.formatSignedSeconds(me.deltaFromLeader) + " vs " + leader.name;
       heroLabel.textContent = "behind " + leader.name;
       heroValue.textContent = lag + "s";
