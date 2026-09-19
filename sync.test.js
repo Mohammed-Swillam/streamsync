@@ -74,16 +74,20 @@ var encoded = sync.encodeViewer(
   },
   1789591012000
 );
-eq("encode viewer compact string", encoded, "Sara|660|1789591008|0|1789591012");
+eq("encode viewer compact string", encoded, "Sara|660|1789591008000|0|1789591012000");
 
 var decoded = sync.decodeViewer("abc12345", encoded);
 eq("decode name", decoded.name, "Sara");
 eq("decode match seconds", decoded.matchSecondsAtAnchor, 660);
+eq("decode keeps millisecond anchor", decoded.anchorTimestamp, 1789591008000);
 eq("decode paused", decoded.isPaused, false);
 eq("decode leftover flag", decoded.left, false);
 eq("left tombstone", sync.decodeViewer("abc12345", "LEFT").left, true);
 eq("missing payload is unknown, not leave", sync.decodeViewer("abc12345", null), null);
 eq("reject empty name", sync.decodeViewer("abc12345", "|1|1|0"), null);
+var legacy = sync.decodeViewer("abc12345", "Sara|660|1789591008|0|1789591012");
+eq("legacy second stamps still decode", legacy.anchorTimestamp, 1789591008000);
+eq("legacy seen stamp still decodes", legacy.lastSeen, 1789591012000);
 
 eq("roster unique", sync.encodeRoster(["aa", "bb", "aa", ""]), "aa,bb");
 eq("roster decode", sync.decodeRoster("aa,bb,aa").join(","), "aa,bb");
@@ -151,20 +155,78 @@ var staggerViewers = [
     isPaused: false
   }
 ];
-var earlyRanked = sync.decorateParticipants(staggerViewers, "me", staggerT0 + 100);
-var lateRanked = sync.decorateParticipants(staggerViewers, "me", staggerT0 + 600);
-var earlyMe = earlyRanked.filter(function (p) { return p.isMe; })[0];
-var lateMe = lateRanked.filter(function (p) { return p.isMe; })[0];
-eq(
-  "staggered floors would disagree",
+eq("staggered floors would disagree",
   sync.calculateCurrentSeconds(staggerViewers[1], staggerT0 + 100) -
     sync.calculateCurrentSeconds(staggerViewers[0], staggerT0 + 100) !==
     sync.calculateCurrentSeconds(staggerViewers[1], staggerT0 + 600) -
       sync.calculateCurrentSeconds(staggerViewers[0], staggerT0 + 600),
   true
 );
-eq("leaderboard delta ignores floor flicker", earlyMe.deltaFromLeader, lateMe.deltaFromLeader);
-eq("leaderboard delta stays the raw gap", earlyMe.deltaFromLeader, -5);
+var alignedEarly = sync.alignNowToDisplayedSecond(staggerViewers[1], staggerT0 + 100);
+var alignedSameSecond = sync.alignNowToDisplayedSecond(staggerViewers[1], staggerT0 + 500);
+eq("align holds the sample time inside one match second", alignedEarly, alignedSameSecond);
+var alignedRanked = sync.decorateParticipants(staggerViewers, "me", alignedEarly);
+var alignedMe = alignedRanked.filter(function (p) { return p.isMe; })[0];
+var alignedLeader = alignedRanked[0];
+eq(
+  "leaderboard delta equals the displayed clocks",
+  alignedMe.deltaFromLeader,
+  alignedMe.calculatedSeconds - alignedLeader.calculatedSeconds
+);
+eq(
+  "same match second keeps the same delay",
+  alignedMe.deltaFromLeader,
+  sync.decorateParticipants(staggerViewers, "me", alignedSameSecond).filter(function (p) { return p.isMe; })[0].deltaFromLeader
+);
+
+var shotT = 1_700_000_000_000;
+var shotViewers = [
+  {
+    userId: "elpop",
+    name: "Elpop",
+    matchSecondsAtAnchor: 83 * 60 + 30,
+    anchorTimestamp: shotT - 800,
+    lastSeen: shotT,
+    isPaused: false
+  },
+  {
+    userId: "me",
+    name: "Test",
+    matchSecondsAtAnchor: 83 * 60 + 21,
+    anchorTimestamp: shotT,
+    lastSeen: shotT,
+    isPaused: false
+  }
+];
+var shotTick = sync.alignNowToDisplayedSecond(shotViewers[1], shotT + 400);
+var shotRanked = sync.decorateParticipants(shotViewers, "me", shotTick);
+var shotMe = shotRanked.filter(function (p) { return p.isMe; })[0];
+var shotLead = shotRanked[0];
+eq("screenshot clocks are 83:30 vs 83:21", sync.formatMatchSeconds(shotLead.calculatedSeconds) + "/" + sync.formatMatchSeconds(shotMe.calculatedSeconds), "83:30/83:21");
+eq("screenshot delay follows the 9s clock gap, not a rounded 10s", shotMe.deltaFromLeader, -9);
+eq("screenshot vs-you on the leader is +9s", shotLead.deltaFromMe, 9);
+
+var elevenT = 2_000_000_000_000;
+var elevenViewers = [
+  {
+    userId: "elpop",
+    name: "Elpop",
+    matchSecondsAtAnchor: 83 * 60 + 31,
+    anchorTimestamp: elevenT,
+    lastSeen: elevenT,
+    isPaused: false
+  },
+  {
+    userId: "me",
+    name: "Test",
+    matchSecondsAtAnchor: 83 * 60 + 20,
+    anchorTimestamp: elevenT,
+    lastSeen: elevenT,
+    isPaused: false
+  }
+];
+var elevenRanked = sync.decorateParticipants(elevenViewers, "me", elevenT);
+eq("an 11s join stays 11s on the board", elevenRanked.filter(function (p) { return p.isMe; })[0].deltaFromLeader, -11);
 
 var meClock = {
   matchSecondsAtAnchor: 54,

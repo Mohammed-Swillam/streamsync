@@ -14,6 +14,8 @@
   var SESSION_MAX_AGE_MS = 8 * 60 * 60 * 1000;
   var ONLINE_MS = 25 * 1000;
   var KV_BASE = "https://api.keyval.org";
+  var STAMP_MS_MIN = 100000000000;
+  var STAMP_MS_MAX = 40000000000000;
 
   function pad2(n) {
     return String(n).padStart(2, "0");
@@ -108,10 +110,11 @@
     return anchor + (displayed - matchAtAnchor) * 1000;
   }
 
-  function roundSignedSeconds(delta) {
-    var n = Number(delta);
-    if (!isFinite(n)) return 0;
-    return Math.round(n);
+  function decodeStamp(raw) {
+    var stamp = clampInt(raw, 0, STAMP_MS_MAX, 0);
+    if (!stamp) return 0;
+    if (stamp < STAMP_MS_MIN) stamp *= 1000;
+    return stamp;
   }
 
   function sanitizeRoomCode(code) {
@@ -168,10 +171,10 @@
     now = now || Date.now();
     var name = sanitizeName(participant && participant.name);
     var matchSecs = Math.max(0, Math.floor(Number(participant.matchSecondsAtAnchor) || 0));
-    var anchorSec = Math.floor((Number(participant.anchorTimestamp) || now) / 1000);
+    var anchorMs = Math.floor(Number(participant.anchorTimestamp) || now);
     var paused = participant && participant.isPaused ? 1 : 0;
-    var seenSec = Math.floor(now / 1000);
-    return [name, matchSecs, anchorSec, paused, seenSec].join("|");
+    var seenMs = Math.floor(now);
+    return [name, matchSecs, anchorMs, paused, seenMs].join("|");
   }
 
   function decodeViewer(userId, raw) {
@@ -184,16 +187,17 @@
     var name = sanitizeName(parts[0]);
     if (!name) return null;
     var matchSecs = clampInt(parts[1], 0, 200 * 60, 0);
-    var anchorSec = clampInt(parts[2], 0, 4000000000, 0);
-    if (!anchorSec) return null;
-    var seenSec = parts.length > 4 ? clampInt(parts[4], 0, 4000000000, anchorSec) : anchorSec;
+    var anchorMs = decodeStamp(parts[2]);
+    if (!anchorMs) return null;
+    var seenMs = parts.length > 4 ? decodeStamp(parts[4]) : anchorMs;
+    if (!seenMs) seenMs = anchorMs;
     return {
       userId: userId,
       name: name,
       matchSecondsAtAnchor: matchSecs,
-      anchorTimestamp: anchorSec * 1000,
+      anchorTimestamp: anchorMs,
       isPaused: parts[3] === "1",
-      lastSeen: seenSec * 1000,
+      lastSeen: seenMs,
       left: false
     };
   }
@@ -271,7 +275,7 @@
       return String(a.name).localeCompare(String(b.name));
     });
 
-    var leaderTime = list.length ? list[0].matchTime : 0;
+    var leaderSecs = list.length ? list[0].calculatedSeconds : 0;
     var me = null;
     for (var i = 0; i < list.length; i++) {
       if (list[i].isMe) {
@@ -279,12 +283,11 @@
         break;
       }
     }
-    var myTime = me ? me.matchTime : 0;
-    var slowestTime = list.length ? list[list.length - 1].matchTime : 0;
+    var mySecs = me ? me.calculatedSeconds : 0;
+    var slowestSecs = list.length ? list[list.length - 1].calculatedSeconds : 0;
 
     return list.map(function (p, index) {
-      var deltaFromLeader = roundSignedSeconds(p.matchTime - leaderTime);
-      var deltaFromMe = roundSignedSeconds(p.matchTime - myTime);
+      var deltaFromLeader = p.calculatedSeconds - leaderSecs;
       return {
         userId: p.userId,
         name: p.name,
@@ -296,10 +299,10 @@
         rank: index + 1,
         isLeader: index === 0,
         deltaFromLeader: deltaFromLeader,
-        deltaFromMe: deltaFromMe,
+        deltaFromMe: p.calculatedSeconds - mySecs,
         lagFromLeader: Math.abs(deltaFromLeader),
         bucket: delayBucket(deltaFromLeader),
-        spoilerWaitSeconds: roundSignedSeconds(leaderTime - slowestTime)
+        spoilerWaitSeconds: leaderSecs - slowestSecs
       };
     });
   }
@@ -424,7 +427,6 @@
     calculateMatchTime: calculateMatchTime,
     calculateCurrentSeconds: calculateCurrentSeconds,
     alignNowToDisplayedSecond: alignNowToDisplayedSecond,
-    roundSignedSeconds: roundSignedSeconds,
     sanitizeRoomCode: sanitizeRoomCode,
     sanitizeName: sanitizeName,
     randomRoomCode: randomRoomCode,
