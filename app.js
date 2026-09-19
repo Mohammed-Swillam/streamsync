@@ -985,6 +985,11 @@
         closeModal("inviteModal");
       }
     });
+    ["exactModal", "inviteModal"].forEach(function (id) {
+      $(id).addEventListener("click", function (event) {
+        if (event.target === $(id)) closeModal(id);
+      });
+    });
   }
 
   document.addEventListener("DOMContentLoaded", bind);
