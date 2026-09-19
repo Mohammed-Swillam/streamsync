@@ -699,9 +699,10 @@
   function msUntilNextDisplayTick() {
     var now = Date.now();
     var tickNow = S.alignNowToDisplayedSecond(myRecord(), now);
-    var delay = tickNow + 1000 - now;
-    if (delay < 16) delay += 1000;
-    return Math.max(16, Math.min(1000, Math.round(delay)));
+    var delay = Math.round(tickNow + 1000 - now);
+    if (delay < 16) delay = 16;
+    if (delay > 1000) delay = 1000;
+    return delay;
   }
 
   function startTimers() {
