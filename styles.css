@@ -587,6 +587,12 @@ button:focus-visible {
   text-transform: uppercase;
 }
 
+.clock-readout .time,
+.clock-readout .kicker,
+.clock-readout .relative {
+  display: block;
+}
+
 .clock-readout .time {
   font-size: clamp(3rem, 9vw, 5.4rem);
   line-height: 0.95;
