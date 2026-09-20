@@ -340,13 +340,15 @@ var ghostAheadBoard = sync.decorateParticipants(
 var ghostRow = ghostAheadBoard.filter(function (p) { return p.userId === "ghost"; })[0];
 var meRow = ghostAheadBoard.filter(function (p) { return p.isMe; })[0];
 eq("ghost stays on the board as last report", ghostAheadBoard.length, 2);
-eq("ghost clock freezes at last report", ghostRow.calculatedSeconds, 100);
-eq("ticking ghost would have been ahead", 100 + 60 > 110, true);
+eq("last-report clock keeps ticking", ghostRow.calculatedSeconds, 160);
+eq("last-report delay stays the gap from their last anchor", ghostRow.deltaFromMe, 50);
 eq("you stay at the live edge without the ghost", meRow.atLiveEdge, true);
 eq("you are the live leader", meRow.isLeader, true);
 eq("ghost does not take the live edge", ghostRow.isLeader, false);
 eq("ghost does not set Wait", meRow.spoilerWaitSeconds, 0);
 eq("online people sort ahead of ghosts", ghostAheadBoard.map(function (p) { return p.userId; }).join(","), "me,ghost");
+eq("wall clock formats last report time", sync.formatWallClock(new Date(2026, 8, 20, 8, 50).getTime()), "08:50");
+eq("wall clock ignores empty stamps", sync.formatWallClock(0), "");
 
 var ghostWaitBoard = sync.decorateParticipants(
   [

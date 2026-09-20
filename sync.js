@@ -306,14 +306,21 @@
     return (n > 0 ? "+" : "") + n + "s";
   }
 
+  function formatWallClock(ms) {
+    var t = Number(ms) || 0;
+    if (!isFinite(t) || t <= 0) return "";
+    var d = new Date(t);
+    if (!isFinite(d.getTime())) return "";
+    return pad2(d.getHours()) + ":" + pad2(d.getMinutes());
+  }
+
   function decorateParticipants(participants, myUserId, now) {
     now = now || Date.now();
     var list = [];
     (participants || []).forEach(function (p) {
       if (!p || p.left || (p.userId !== myUserId && shouldDrop(p, now))) return;
       var online = p.userId === myUserId ? true : isOnline(p, now);
-      var sampleAt = online ? now : (Number(p.lastSeen) || Number(p.anchorTimestamp) || now);
-      var matchTime = calculateMatchTime(p, sampleAt);
+      var matchTime = calculateMatchTime(p, now);
       list.push({
         userId: p.userId,
         name: p.name,
@@ -454,8 +461,7 @@
       count += 1;
       var live = isOnline(p, now);
       if (live) liveCount += 1;
-      var sampleAt = live ? now : (Number(p.lastSeen) || Number(p.anchorTimestamp) || now);
-      var secs = calculateCurrentSeconds(p, sampleAt);
+      var secs = calculateCurrentSeconds(p, now);
       if (!best) {
         best = p;
         bestSecs = secs;
@@ -532,6 +538,7 @@
     delayBucket: delayBucket,
     waitSeverity: waitSeverity,
     formatSignedSeconds: formatSignedSeconds,
+    formatWallClock: formatWallClock,
     decorateParticipants: decorateParticipants,
     escapeHtml: escapeHtml,
     kvSetUrl: kvSetUrl,
