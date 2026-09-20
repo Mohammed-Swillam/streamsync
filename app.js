@@ -31,6 +31,7 @@
   var pollInFlight = false;
   var rosterInFlight = null;
   var rosterInFlightRoom = "";
+  var publishEpoch = 0;
   var announceTimer = null;
   var eventSource = null;
   var broadcast = null;
@@ -376,43 +377,6 @@
     }, 250);
   }
 
-  async function readRoomMeta(keys) {
-    try {
-      return { ok: true, meta: S.decodeRoomMeta(await kvGet(keys.meta)) };
-    } catch (err) {
-      return { ok: false, meta: null };
-    }
-  }
-
-  async function wipeRoomRecords(roomId, expiredCreatedAt) {
-    var room = S.sanitizeRoomCode(roomId);
-    expiredCreatedAt = Math.floor(Number(expiredCreatedAt) || 0);
-    if (!room || !expiredCreatedAt) return false;
-    var keys = S.roomKeys(room);
-
-    async function stillExpiredGeneration() {
-      var result = await readRoomMeta(keys);
-      return result.ok && S.sameExpiredGeneration(result.meta, expiredCreatedAt);
-    }
-
-    if (!(await stillExpiredGeneration())) return false;
-    var ids = [];
-    try {
-      ids = S.decodeRoster(await kvGet(keys.roster));
-    } catch (err) {
-      return false;
-    }
-    if (!(await stillExpiredGeneration())) return false;
-    await Promise.all(ids.map(function (id) {
-      return kvSet(keys.user(id), "LEFT").catch(function () {});
-    }));
-    if (!(await stillExpiredGeneration())) return false;
-    try {
-      await kvSet(keys.roster, "");
-    } catch (err) {}
-    return true;
-  }
-
   async function kickExpiredRoom() {
     if (!state.roomId) return;
     await exitRoom({ expired: true });
@@ -428,10 +392,7 @@
       meta = S.decodeRoomMeta(await kvGet(keys.meta));
       metaReadOk = true;
     } catch (err) {}
-    if (S.roomMetaStatus(meta, metaReadOk) === "expired") {
-      var wiped = await wipeRoomRecords(room, meta && meta.createdAt);
-      if (wiped) return null;
-    }
+    if (S.roomMetaStatus(meta, metaReadOk) === "expired") return null;
     var ids = S.decodeRoster(await kvGet(keys.roster));
     if (!ids.length) return null;
     var rows = await Promise.all(ids.map(function (id) {
@@ -516,14 +477,15 @@
 
   async function publishMe(options) {
     options = options || {};
+    var epoch = publishEpoch;
     rememberMe();
-    if (!state.roomId) return;
+    if (!state.roomId || state.exiting) return;
     if (options.leave) clearSession();
     else persistSession();
     render();
     var keys = S.roomKeys(state.roomId);
     var payload = livePayload(options.leave ? "leave" : "sync");
-    publishLocal(payload);
+    if (!options.leave) publishLocal(payload);
     var kvOk = false;
     var liveOk = false;
     try {
@@ -532,23 +494,26 @@
       } else {
         if (options.roster) {
           var ensured = await ensureRoster();
+          if (epoch !== publishEpoch || !state.roomId || state.exiting) return;
           if (ensured && ensured.expired) {
             kvOk = true;
             await kickExpiredRoom();
             return;
           }
         }
+        if (epoch !== publishEpoch || !state.roomId || state.exiting) return;
         await kvSet(keys.user(state.userId), payload.body);
       }
       kvOk = true;
     } catch (err) {}
+    if (epoch !== publishEpoch || (!options.leave && (!state.roomId || state.exiting))) return;
     try {
       await publishLive(payload);
       liveOk = true;
     } catch (err) {}
     if (kvOk || liveOk) markLive();
     else setNetState(state.lastGoodSync ? "degraded" : "offline");
-    render();
+    if (state.roomId && epoch === publishEpoch) render();
   }
 
   async function runEnsureRoster() {
@@ -565,24 +530,20 @@
       return { expired: true };
     }
     if (metaStatus === "expired") {
-      var wiped = await wipeRoomRecords(state.roomId, meta && meta.createdAt);
-      var again = await readRoomMeta(keys);
-      var againStatus = S.roomMetaStatus(again.meta, again.ok);
-      if (againStatus === "live") {
-        if (again.meta && again.meta.createdAt) rememberRoomCreatedAt(again.meta.createdAt);
-        state.claimExpiredRoom = false;
-      } else if (!state.claimExpiredRoom) {
+      if (!state.claimExpiredRoom) return { expired: true };
+      var claimedAt = Date.now();
+      try {
+        await kvSet(keys.meta, S.encodeRoomMeta({ createdAt: claimedAt }));
+      } catch (err) {
         return { expired: true };
-      } else if (againStatus === "unknown") {
-        if (S.roomIsExpired({ createdAt: state.roomCreatedAt })) return { expired: true };
-      } else {
-        var claimedAt = Date.now();
-        try {
-          await kvSet(keys.meta, S.encodeRoomMeta({ createdAt: claimedAt }));
-        } catch (err) {}
-        rememberRoomCreatedAt(claimedAt);
-        state.claimExpiredRoom = false;
       }
+      if (!state.roomId || state.exiting) return { expired: false };
+      rememberRoomCreatedAt(claimedAt);
+      state.claimExpiredRoom = false;
+      try {
+        await kvSet(keys.roster, S.encodeRoster([state.userId]));
+      } catch (err) {}
+      return { expired: false };
     } else if (metaStatus === "missing") {
       var createdAt = Date.now();
       try {
@@ -593,6 +554,7 @@
     } else if (metaStatus === "live" && meta && meta.createdAt) {
       rememberRoomCreatedAt(meta.createdAt);
     }
+    if (!state.roomId || state.exiting) return { expired: false };
     var current = S.decodeRoster(await kvGet(keys.roster));
     if (current.indexOf(state.userId) === -1) {
       current.push(state.userId);
@@ -997,6 +959,7 @@
   async function exitRoom(options) {
     options = options || {};
     if (!state.roomId || state.exiting) return;
+    publishEpoch += 1;
     state.exiting = true;
     if (!options.expired) {
       try { await publishMe({ leave: true }); } catch (err) {}

@@ -204,13 +204,6 @@
     return "live";
   }
 
-  function sameExpiredGeneration(meta, expiredCreatedAt, now) {
-    var expected = Math.floor(Number(expiredCreatedAt) || 0);
-    var actual = meta ? Math.floor(Number(meta.createdAt) || 0) : 0;
-    if (!expected || !actual || expected !== actual) return false;
-    return roomIsExpired(meta, now);
-  }
-
   function encodeViewer(participant, now) {
     now = now || Date.now();
     var name = sanitizeName(participant && participant.name);
@@ -525,7 +518,6 @@
     decodeRoomMeta: decodeRoomMeta,
     roomIsExpired: roomIsExpired,
     roomMetaStatus: roomMetaStatus,
-    sameExpiredGeneration: sameExpiredGeneration,
     encodeViewer: encodeViewer,
     decodeViewer: decodeViewer,
     encodeRoster: encodeRoster,

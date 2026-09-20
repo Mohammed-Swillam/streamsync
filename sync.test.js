@@ -403,29 +403,6 @@ eq(
   sync.roomMetaStatus({ createdAt: ghostAheadT }, false, ghostAheadT + sync.ROOM_MAX_AGE_MS + 1),
   "unknown"
 );
-eq(
-  "wipe only matches the expired generation",
-  sync.sameExpiredGeneration(
-    { createdAt: ghostAheadT },
-    ghostAheadT,
-    ghostAheadT + sync.ROOM_MAX_AGE_MS + 1
-  ),
-  true
-);
-eq(
-  "wipe does not match a recreated room",
-  sync.sameExpiredGeneration(
-    { createdAt: ghostAheadT + 1 },
-    ghostAheadT,
-    ghostAheadT + sync.ROOM_MAX_AGE_MS + 1
-  ),
-  false
-);
-eq(
-  "wipe does not match a still-live generation",
-  sync.sameExpiredGeneration({ createdAt: ghostAheadT }, ghostAheadT, ghostAheadT),
-  false
-);
 
 var savedAt = 1_700_000_000_000;
 var session = sync.buildSession(
