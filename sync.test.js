@@ -390,6 +390,19 @@ eq(
   sync.roomIsExpired({ createdAt: ghostAheadT }, ghostAheadT + sync.ROOM_MAX_AGE_MS + 1),
   true
 );
+eq("failed meta read is unknown, not missing", sync.roomMetaStatus(null, false, ghostAheadT), "unknown");
+eq("confirmed empty meta is missing", sync.roomMetaStatus(null, true, ghostAheadT), "missing");
+eq("live meta stays live", sync.roomMetaStatus({ createdAt: ghostAheadT }, true, ghostAheadT), "live");
+eq(
+  "expired meta is expired only after a successful read",
+  sync.roomMetaStatus({ createdAt: ghostAheadT }, true, ghostAheadT + sync.ROOM_MAX_AGE_MS + 1),
+  "expired"
+);
+eq(
+  "a failed read of expired meta must not look missing",
+  sync.roomMetaStatus({ createdAt: ghostAheadT }, false, ghostAheadT + sync.ROOM_MAX_AGE_MS + 1),
+  "unknown"
+);
 
 var savedAt = 1_700_000_000_000;
 var session = sync.buildSession(

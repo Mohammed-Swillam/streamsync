@@ -197,6 +197,13 @@
     return now - Number(meta.createdAt) > maxAgeMs;
   }
 
+  function roomMetaStatus(meta, readOk, now) {
+    if (!readOk) return "unknown";
+    if (!meta) return "missing";
+    if (roomIsExpired(meta, now)) return "expired";
+    return "live";
+  }
+
   function encodeViewer(participant, now) {
     now = now || Date.now();
     var name = sanitizeName(participant && participant.name);
@@ -506,6 +513,7 @@
     encodeRoomMeta: encodeRoomMeta,
     decodeRoomMeta: decodeRoomMeta,
     roomIsExpired: roomIsExpired,
+    roomMetaStatus: roomMetaStatus,
     encodeViewer: encodeViewer,
     decodeViewer: decodeViewer,
     encodeRoster: encodeRoster,

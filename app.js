@@ -391,10 +391,12 @@
     if (!room) return null;
     var keys = S.roomKeys(room);
     var meta = null;
+    var metaReadOk = false;
     try {
       meta = S.decodeRoomMeta(await kvGet(keys.meta));
+      metaReadOk = true;
     } catch (err) {}
-    if (S.roomIsExpired(meta)) {
+    if (S.roomMetaStatus(meta, metaReadOk) === "expired") {
       await wipeRoomRecords(room);
       return null;
     }
@@ -520,10 +522,13 @@
   async function ensureRoster() {
     var keys = S.roomKeys(state.roomId);
     var meta = null;
+    var metaReadOk = false;
     try {
       meta = S.decodeRoomMeta(await kvGet(keys.meta));
+      metaReadOk = true;
     } catch (err) {}
-    if (S.roomIsExpired(meta)) {
+    var metaStatus = S.roomMetaStatus(meta, metaReadOk);
+    if (metaStatus === "expired") {
       await wipeRoomRecords(state.roomId);
       if (!state.claimExpiredRoom) {
         return { expired: true };
@@ -532,7 +537,7 @@
         await kvSet(keys.meta, S.encodeRoomMeta({ createdAt: Date.now() }));
       } catch (err) {}
       state.claimExpiredRoom = false;
-    } else if (!meta) {
+    } else if (metaStatus === "missing") {
       try {
         await kvSet(keys.meta, S.encodeRoomMeta({ createdAt: Date.now() }));
       } catch (err) {}
