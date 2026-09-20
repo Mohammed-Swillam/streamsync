@@ -813,7 +813,7 @@
     });
   }
 
-  function setHeroArabic(kind, name) {
+  function setHeroArabic(kind) {
     var el = $("roleHeroArabic");
     el.textContent = "";
     if (kind !== "ahead" && kind !== "behind") {
@@ -821,14 +821,9 @@
       return;
     }
     el.classList.remove("hidden");
-    if (kind === "behind") {
-      el.appendChild(document.createTextNode("إنت متأخر يابيه"));
-      return;
-    }
-    el.appendChild(document.createTextNode("إنت سابق يا "));
-    var who = document.createElement("bdi");
-    who.textContent = name || "";
-    el.appendChild(who);
+    el.appendChild(document.createTextNode(
+      kind === "behind" ? "إنت متأخر يابيه" : "إنت سابق يابيه"
+    ));
   }
 
   function setHeroSeconds(secondsLabel, waitWord) {
@@ -907,7 +902,7 @@
         heroLabel.textContent = "";
         heroLabel.classList.add("hidden");
         setHeroSeconds(wait + "s", true);
-        setHeroArabic("ahead", state.name);
+        setHeroArabic("ahead");
       } else {
         banner.dataset.role = "tied";
         heroLabel.textContent = "Tied at the live edge";
