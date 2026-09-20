@@ -29,6 +29,8 @@
   var pollTimer = null;
   var heartbeatTimer = null;
   var pollInFlight = false;
+  var rosterInFlight = null;
+  var rosterInFlightRoom = "";
   var announceTimer = null;
   var eventSource = null;
   var broadcast = null;
@@ -528,7 +530,8 @@
     render();
   }
 
-  async function ensureRoster() {
+  async function runEnsureRoster() {
+    if (!state.roomId) return { expired: false };
     var keys = S.roomKeys(state.roomId);
     var meta = null;
     var metaReadOk = false;
@@ -567,6 +570,27 @@
       await kvSet(keys.roster, S.encodeRoster(current));
     }
     return { expired: false };
+  }
+
+  function ensureRoster() {
+    var roomId = state.roomId;
+    if (!roomId) return Promise.resolve({ expired: false });
+    if (rosterInFlight && rosterInFlightRoom === roomId) return rosterInFlight;
+    rosterInFlightRoom = roomId;
+    rosterInFlight = runEnsureRoster().then(function (result) {
+      if (rosterInFlightRoom === roomId) {
+        rosterInFlight = null;
+        rosterInFlightRoom = "";
+      }
+      return result;
+    }, function (err) {
+      if (rosterInFlightRoom === roomId) {
+        rosterInFlight = null;
+        rosterInFlightRoom = "";
+      }
+      throw err;
+    });
+    return rosterInFlight;
   }
 
   async function fetchRoom() {
@@ -956,6 +980,8 @@
     state.claimExpiredRoom = false;
     state.exiting = false;
     state.roomCreatedAt = 0;
+    rosterInFlight = null;
+    rosterInFlightRoom = "";
     $("dashboardView").classList.add("hidden");
     $("welcomeView").classList.remove("hidden");
     $("exitRoomBtn").classList.add("hidden");
