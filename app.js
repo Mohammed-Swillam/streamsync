@@ -523,6 +523,41 @@
     if (state.roomId && epoch === publishEpoch) render();
   }
 
+  function sameRoom(epoch, roomId) {
+    return epoch === publishEpoch && !!roomId && state.roomId === roomId;
+  }
+
+  async function joinGenerationRoster(keys, createdAt, epoch, roomId) {
+    var attempts = 0;
+    while (attempts < 4) {
+      attempts += 1;
+      if (!sameRoom(epoch, roomId)) return;
+      var latest = null;
+      try {
+        latest = S.decodeRoomMeta(await kvGet(keys.meta));
+      } catch (err) {}
+      if (!sameRoom(epoch, roomId)) return;
+      var gen = latest && latest.createdAt ? latest.createdAt : createdAt;
+      rememberRoomCreatedAt(gen);
+      state.rosterGeneration = gen;
+      var rosterKey = keys.rosterAt(gen);
+      var current = S.decodeRoster(await kvGet(rosterKey));
+      if (!sameRoom(epoch, roomId)) return;
+      if (current.indexOf(state.userId) === -1) {
+        current.push(state.userId);
+        await kvSet(rosterKey, S.encodeRoster(current));
+      }
+      if (!sameRoom(epoch, roomId)) return;
+      try {
+        latest = S.decodeRoomMeta(await kvGet(keys.meta));
+      } catch (err) {
+        return;
+      }
+      if (!latest || !latest.createdAt || latest.createdAt === gen) return;
+      createdAt = latest.createdAt;
+    }
+  }
+
   async function runEnsureRoster() {
     var epoch = publishEpoch;
     var roomId = state.roomId;
@@ -537,12 +572,11 @@
       meta = S.decodeRoomMeta(await kvGet(keys.meta));
       metaReadOk = true;
     } catch (err) {}
-    if (epoch !== publishEpoch || state.roomId !== roomId) return { expired: false };
+    if (!sameRoom(epoch, roomId)) return { expired: false };
     var metaStatus = S.roomMetaStatus(meta, metaReadOk);
     if (metaStatus === "unknown" && S.roomIsExpired({ createdAt: state.roomCreatedAt })) {
       return { expired: true };
     }
-    var isolateRoster = false;
     if (metaStatus === "expired") {
       if (!state.claimExpiredRoom) return { expired: true };
       var claimedAt = Date.now();
@@ -551,42 +585,37 @@
       } catch (err) {
         return { expired: true };
       }
-      if (epoch !== publishEpoch || state.roomId !== roomId) return { expired: false };
-      try {
-        var latest = S.decodeRoomMeta(await kvGet(keys.meta));
-        if (latest && latest.createdAt) claimedAt = latest.createdAt;
-      } catch (err) {}
-      if (epoch !== publishEpoch || state.roomId !== roomId) return { expired: false };
-      rememberRoomCreatedAt(claimedAt);
-      state.rosterGeneration = claimedAt;
+      if (!sameRoom(epoch, roomId)) return { expired: false };
       state.claimExpiredRoom = false;
-      isolateRoster = true;
-    } else if (metaStatus === "missing") {
-      var createdAt = Date.now();
+      await joinGenerationRoster(keys, claimedAt, epoch, roomId);
+      return { expired: false };
+    }
+    if (metaStatus === "missing") {
+      var stampedAt = Date.now();
       try {
-        await kvSet(keys.meta, S.encodeRoomMeta({ createdAt: createdAt }));
+        await kvSet(keys.meta, S.encodeRoomMeta({ createdAt: stampedAt }));
       } catch (err) {}
-      if (epoch !== publishEpoch || state.roomId !== roomId) return { expired: false };
-      rememberRoomCreatedAt(createdAt);
+      if (!sameRoom(epoch, roomId)) return { expired: false };
+      rememberRoomCreatedAt(stampedAt);
       state.claimExpiredRoom = false;
     } else if (metaStatus === "live" && meta && meta.createdAt) {
       rememberRoomCreatedAt(meta.createdAt);
     }
-    if (epoch !== publishEpoch || state.roomId !== roomId) return { expired: false };
+    if (!sameRoom(epoch, roomId)) return { expired: false };
     var createdAt = state.rosterGeneration || state.roomCreatedAt || (meta && meta.createdAt);
     var rosterKey = keys.roster;
-    if (isolateRoster || state.rosterGeneration) {
+    if (state.rosterGeneration) {
       rosterKey = keys.rosterAt(createdAt);
     } else if (createdAt) {
       var existingGen = S.decodeRoster(await kvGet(keys.rosterAt(createdAt)));
-      if (epoch !== publishEpoch || state.roomId !== roomId) return { expired: false };
+      if (!sameRoom(epoch, roomId)) return { expired: false };
       if (existingGen.length) {
         rosterKey = keys.rosterAt(createdAt);
         state.rosterGeneration = createdAt;
       }
     }
     var current = S.decodeRoster(await kvGet(rosterKey));
-    if (epoch !== publishEpoch || state.roomId !== roomId) return { expired: false };
+    if (!sameRoom(epoch, roomId)) return { expired: false };
     if (current.indexOf(state.userId) === -1) {
       current.push(state.userId);
       await kvSet(rosterKey, S.encodeRoster(current));
