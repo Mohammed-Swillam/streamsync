@@ -518,6 +518,9 @@
 
   async function runEnsureRoster() {
     if (!state.roomId) return { expired: false };
+    if (!state.claimExpiredRoom && S.roomIsExpired({ createdAt: state.roomCreatedAt })) {
+      return { expired: true };
+    }
     var keys = S.roomKeys(state.roomId);
     var meta = null;
     var metaReadOk = false;
@@ -538,12 +541,12 @@
         return { expired: true };
       }
       if (!state.roomId || state.exiting) return { expired: false };
+      try {
+        var latest = S.decodeRoomMeta(await kvGet(keys.meta));
+        if (latest && latest.createdAt) claimedAt = latest.createdAt;
+      } catch (err) {}
       rememberRoomCreatedAt(claimedAt);
       state.claimExpiredRoom = false;
-      try {
-        await kvSet(keys.roster, S.encodeRoster([state.userId]));
-      } catch (err) {}
-      return { expired: false };
     } else if (metaStatus === "missing") {
       var createdAt = Date.now();
       try {
