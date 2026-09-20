@@ -814,6 +814,35 @@
     });
   }
 
+  function setHeroArabic(kind) {
+    var el = $("roleHeroArabic");
+    el.textContent = "";
+    if (kind !== "ahead" && kind !== "behind") {
+      el.classList.add("hidden");
+      return;
+    }
+    el.classList.remove("hidden");
+    el.appendChild(document.createTextNode(
+      kind === "behind" ? "إنت متأخر يابيه" : "إنت سابق يابيه"
+    ));
+  }
+
+  function setHeroSeconds(secondsLabel, waitWord) {
+    var el = $("roleHeroValue");
+    el.textContent = "";
+    if (waitWord) {
+      var word = document.createElement("span");
+      word.className = "role-hero-word";
+      word.textContent = "Wait";
+      el.appendChild(word);
+    }
+    var secs = document.createElement("span");
+    secs.className = "role-hero-secs";
+    secs.textContent = secondsLabel;
+    el.appendChild(secs);
+    el.classList.remove("hidden");
+  }
+
   function render() {
     if (!state.roomId) return;
     var tickNow = S.alignNowToDisplayedSecond(myRecord(), Date.now());
@@ -847,6 +876,7 @@
     boardInvite.classList.remove("hidden");
     $("roleText").classList.remove("hidden");
     heroLabel.classList.remove("hidden");
+    setHeroArabic("");
     delete banner.dataset.lag;
     delete banner.dataset.wait;
 
@@ -872,8 +902,8 @@
         banner.dataset.wait = S.waitSeverity(wait);
         heroLabel.textContent = "";
         heroLabel.classList.add("hidden");
-        heroValue.textContent = "Wait " + wait + "s";
-        heroValue.classList.remove("hidden");
+        setHeroSeconds(wait + "s", true);
+        setHeroArabic("ahead");
       } else {
         banner.dataset.role = "tied";
         heroLabel.textContent = "Tied at the live edge";
@@ -888,8 +918,8 @@
       $("roleText").classList.add("hidden");
       $("myRelative").textContent = S.formatSignedSeconds(me.deltaFromLeader) + " vs " + leader.name;
       heroLabel.textContent = "behind " + leader.name;
-      heroValue.textContent = lag + "s";
-      heroValue.classList.remove("hidden");
+      setHeroSeconds(lag + "s");
+      setHeroArabic("behind");
     }
 
     renderLeaderboard(list);

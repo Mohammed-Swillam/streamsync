@@ -455,7 +455,7 @@ button:focus-visible {
 .banner[data-role="behind"],
 .banner[data-role="tied"] {
   grid-template-columns: 1fr;
-  padding: 20px 16px 18px;
+  padding: 16px 16px 14px;
 }
 
 .banner[data-role="ahead"] {
@@ -523,15 +523,36 @@ button:focus-visible {
 .banner[data-role="behind"] .role-hero,
 .banner[data-role="tied"] .role-hero {
   text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .banner[data-role="ahead"] .role-hero-label { display: none; }
 
+.role-hero-arabic {
+  display: block;
+  margin: 0 0 8px;
+  padding: 0 8px;
+  color: inherit;
+  font-family: "SF Arabic", "Geeza Pro", "Noto Naskh Arabic", "Noto Sans Arabic", Tahoma, sans-serif;
+  font-size: clamp(1.15rem, 4.6vw, 1.45rem);
+  font-weight: 700;
+  line-height: 1.4;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.banner[data-role="ahead"] .role-hero-arabic { color: var(--wait-high); }
+.banner[data-role="ahead"][data-wait="low"] .role-hero-arabic { color: var(--wait-low); }
+.banner[data-role="ahead"][data-wait="mid"] .role-hero-arabic { color: var(--wait-mid); }
+.banner[data-role="behind"] .role-hero-arabic { color: var(--behind); }
+
 .role-hero-label {
   display: block;
   color: var(--muted);
-  font-size: 0.75rem;
-  letter-spacing: 0.1em;
+  font-size: 0.78rem;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   margin-top: 8px;
 }
@@ -542,12 +563,27 @@ button:focus-visible {
 }
 
 .role-hero-value {
-  display: block;
-  font-size: clamp(2.8rem, 13vw, 4.8rem);
-  line-height: 0.9;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  font-size: clamp(2.7rem, 12.5vw, 3.6rem);
+  line-height: 0.92;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
-  letter-spacing: 0.02em;
+  letter-spacing: -0.03em;
+}
+
+.role-hero-word {
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.role-hero-secs {
+  letter-spacing: -0.03em;
 }
 
 .banner[data-role="ahead"] .role-hero-value { color: var(--wait-high); }
