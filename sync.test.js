@@ -259,6 +259,11 @@ eq("signed format behind", sync.formatSignedSeconds(-7), "-7s");
 eq("ntfy topic from room", sync.ntfyTopic("DERBY-7K3Q"), "ssfc_derby-7k3q");
 eq("kv user key", sync.roomKeys("DERBY-7K3Q").user("ab12cd34"), "ssfcU-DERBY-7K3Q-ab12cd34");
 eq("kv meta key", sync.roomKeys("DERBY-7K3Q").meta, "ssfcM-DERBY-7K3Q");
+eq(
+  "claimed rooms get a generation-scoped roster",
+  sync.roomKeys("DERBY-7K3Q").rosterAt(1700000000000),
+  "ssfcR-DERBY-7K3Q-1700000000000"
+);
 eq("escape html", sync.escapeHtml('<img src=x onerror="alert(1)">'), "&lt;img src=x onerror=&quot;alert(1)&quot;&gt;");
 
 eq("stale drop is 45 minutes", sync.STALE_DROP_MS, 45 * 60 * 1000);

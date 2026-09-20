@@ -22,7 +22,8 @@
     lastGoodSync: 0,
     claimExpiredRoom: false,
     exiting: false,
-    roomCreatedAt: 0
+    roomCreatedAt: 0,
+    rosterGeneration: 0
   };
 
   var tickTimer = null;
@@ -393,7 +394,12 @@
       metaReadOk = true;
     } catch (err) {}
     if (S.roomMetaStatus(meta, metaReadOk) === "expired") return null;
-    var ids = S.decodeRoster(await kvGet(keys.roster));
+    var rosterKey = keys.roster;
+    if (meta && meta.createdAt) {
+      var genIds = S.decodeRoster(await kvGet(keys.rosterAt(meta.createdAt)));
+      if (genIds.length) rosterKey = keys.rosterAt(meta.createdAt);
+    }
+    var ids = S.decodeRoster(await kvGet(rosterKey));
     if (!ids.length) return null;
     var rows = await Promise.all(ids.map(function (id) {
       return kvGet(keys.user(id)).then(function (raw) {
@@ -479,7 +485,8 @@
     options = options || {};
     var epoch = publishEpoch;
     rememberMe();
-    if (!state.roomId || state.exiting) return;
+    if (!state.roomId) return;
+    if (!options.leave && (state.exiting || epoch !== publishEpoch)) return;
     if (options.leave) clearSession();
     else persistSession();
     render();
@@ -517,21 +524,25 @@
   }
 
   async function runEnsureRoster() {
-    if (!state.roomId) return { expired: false };
+    var epoch = publishEpoch;
+    var roomId = state.roomId;
+    if (!roomId) return { expired: false };
     if (!state.claimExpiredRoom && S.roomIsExpired({ createdAt: state.roomCreatedAt })) {
       return { expired: true };
     }
-    var keys = S.roomKeys(state.roomId);
+    var keys = S.roomKeys(roomId);
     var meta = null;
     var metaReadOk = false;
     try {
       meta = S.decodeRoomMeta(await kvGet(keys.meta));
       metaReadOk = true;
     } catch (err) {}
+    if (epoch !== publishEpoch || state.roomId !== roomId) return { expired: false };
     var metaStatus = S.roomMetaStatus(meta, metaReadOk);
     if (metaStatus === "unknown" && S.roomIsExpired({ createdAt: state.roomCreatedAt })) {
       return { expired: true };
     }
+    var isolateRoster = false;
     if (metaStatus === "expired") {
       if (!state.claimExpiredRoom) return { expired: true };
       var claimedAt = Date.now();
@@ -540,28 +551,45 @@
       } catch (err) {
         return { expired: true };
       }
-      if (!state.roomId || state.exiting) return { expired: false };
+      if (epoch !== publishEpoch || state.roomId !== roomId) return { expired: false };
       try {
         var latest = S.decodeRoomMeta(await kvGet(keys.meta));
         if (latest && latest.createdAt) claimedAt = latest.createdAt;
       } catch (err) {}
+      if (epoch !== publishEpoch || state.roomId !== roomId) return { expired: false };
       rememberRoomCreatedAt(claimedAt);
+      state.rosterGeneration = claimedAt;
       state.claimExpiredRoom = false;
+      isolateRoster = true;
     } else if (metaStatus === "missing") {
       var createdAt = Date.now();
       try {
         await kvSet(keys.meta, S.encodeRoomMeta({ createdAt: createdAt }));
       } catch (err) {}
+      if (epoch !== publishEpoch || state.roomId !== roomId) return { expired: false };
       rememberRoomCreatedAt(createdAt);
       state.claimExpiredRoom = false;
     } else if (metaStatus === "live" && meta && meta.createdAt) {
       rememberRoomCreatedAt(meta.createdAt);
     }
-    if (!state.roomId || state.exiting) return { expired: false };
-    var current = S.decodeRoster(await kvGet(keys.roster));
+    if (epoch !== publishEpoch || state.roomId !== roomId) return { expired: false };
+    var createdAt = state.rosterGeneration || state.roomCreatedAt || (meta && meta.createdAt);
+    var rosterKey = keys.roster;
+    if (isolateRoster || state.rosterGeneration) {
+      rosterKey = keys.rosterAt(createdAt);
+    } else if (createdAt) {
+      var existingGen = S.decodeRoster(await kvGet(keys.rosterAt(createdAt)));
+      if (epoch !== publishEpoch || state.roomId !== roomId) return { expired: false };
+      if (existingGen.length) {
+        rosterKey = keys.rosterAt(createdAt);
+        state.rosterGeneration = createdAt;
+      }
+    }
+    var current = S.decodeRoster(await kvGet(rosterKey));
+    if (epoch !== publishEpoch || state.roomId !== roomId) return { expired: false };
     if (current.indexOf(state.userId) === -1) {
       current.push(state.userId);
-      await kvSet(keys.roster, S.encodeRoster(current));
+      await kvSet(rosterKey, S.encodeRoster(current));
     }
     return { expired: false };
   }
@@ -598,7 +626,14 @@
         await kickExpiredRoom();
         return;
       }
-      var ids = S.decodeRoster(await kvGet(keys.roster));
+      var rosterKey = state.rosterGeneration
+        ? keys.rosterAt(state.rosterGeneration)
+        : keys.roster;
+      if (!state.rosterGeneration && state.roomCreatedAt) {
+        var genIds = S.decodeRoster(await kvGet(keys.rosterAt(state.roomCreatedAt)));
+        if (genIds.length) rosterKey = keys.rosterAt(state.roomCreatedAt);
+      }
+      var ids = S.decodeRoster(await kvGet(rosterKey));
       if (ids.indexOf(state.userId) === -1) ids.push(state.userId);
       var others = ids.filter(function (id) { return id !== state.userId; });
       var rows = await Promise.all(others.map(function (id) {
@@ -930,6 +965,7 @@
     state.participants = {};
     state.claimExpiredRoom = !options.resumed;
     state.roomCreatedAt = Math.floor(Number(options.roomCreatedAt) || 0) || (options.resumed ? 0 : Date.now());
+    state.rosterGeneration = 0;
     persistName(state.name);
     rememberMe();
     persistSession();
@@ -975,6 +1011,7 @@
     state.claimExpiredRoom = false;
     state.exiting = false;
     state.roomCreatedAt = 0;
+    state.rosterGeneration = 0;
     rosterInFlight = null;
     rosterInFlightRoom = "";
     $("dashboardView").classList.add("hidden");

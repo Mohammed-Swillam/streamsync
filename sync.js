@@ -167,6 +167,11 @@
     var room = sanitizeRoomCode(roomId);
     return {
       roster: "ssfcR-" + room,
+      rosterAt: function (createdAt) {
+        var gen = Math.floor(Number(createdAt) || 0);
+        if (!gen) return "ssfcR-" + room;
+        return "ssfcR-" + room + "-" + gen;
+      },
       meta: "ssfcM-" + room,
       user: function (userId) {
         return "ssfcU-" + room + "-" + userId;
