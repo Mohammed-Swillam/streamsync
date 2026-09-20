@@ -831,6 +831,22 @@
     el.appendChild(who);
   }
 
+  function setHeroSeconds(secondsLabel, waitWord) {
+    var el = $("roleHeroValue");
+    el.textContent = "";
+    if (waitWord) {
+      var word = document.createElement("span");
+      word.className = "role-hero-word";
+      word.textContent = "Wait";
+      el.appendChild(word);
+    }
+    var secs = document.createElement("span");
+    secs.className = "role-hero-secs";
+    secs.textContent = secondsLabel;
+    el.appendChild(secs);
+    el.classList.remove("hidden");
+  }
+
   function render() {
     if (!state.roomId) return;
     var tickNow = S.alignNowToDisplayedSecond(myRecord(), Date.now());
@@ -890,8 +906,7 @@
         banner.dataset.wait = S.waitSeverity(wait);
         heroLabel.textContent = "";
         heroLabel.classList.add("hidden");
-        heroValue.textContent = "Wait " + wait + "s";
-        heroValue.classList.remove("hidden");
+        setHeroSeconds(wait + "s", true);
         setHeroArabic("ahead", state.name);
       } else {
         banner.dataset.role = "tied";
@@ -907,8 +922,7 @@
       $("roleText").classList.add("hidden");
       $("myRelative").textContent = S.formatSignedSeconds(me.deltaFromLeader) + " vs " + leader.name;
       heroLabel.textContent = "behind " + leader.name;
-      heroValue.textContent = lag + "s";
-      heroValue.classList.remove("hidden");
+      setHeroSeconds(lag + "s");
       setHeroArabic("behind");
     }
 
