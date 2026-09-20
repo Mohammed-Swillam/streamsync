@@ -399,7 +399,8 @@
       matchSecondsAtAnchor: Math.max(0, Math.floor(Number(input.matchSecondsAtAnchor) || 0)),
       anchorTimestamp: Math.floor(Number(input.anchorTimestamp) || now),
       isPaused: !!(input && input.isPaused),
-      savedAt: now
+      savedAt: now,
+      roomCreatedAt: Math.floor(Number(input.roomCreatedAt) || 0)
     };
   }
 
@@ -418,8 +419,11 @@
     var session = buildSession(data, now);
     if (!session) return null;
     var savedAt = Number(data.savedAt) || session.anchorTimestamp;
+    var roomCreatedAt = Math.floor(Number(data.roomCreatedAt) || session.roomCreatedAt || 0);
+    if (roomCreatedAt && roomIsExpired({ createdAt: roomCreatedAt }, now)) return null;
     if (now - savedAt > SESSION_MAX_AGE_MS) return null;
     session.savedAt = savedAt;
+    session.roomCreatedAt = roomCreatedAt;
     session.matchSecondsAtAnchor = Math.max(0, Math.floor(Number(data.matchSecondsAtAnchor) || 0));
     session.anchorTimestamp = Math.floor(Number(data.anchorTimestamp) || now);
     session.isPaused = !!data.isPaused;

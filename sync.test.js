@@ -411,7 +411,8 @@ var session = sync.buildSession(
     name: "Elpop",
     matchSecondsAtAnchor: 640,
     anchorTimestamp: savedAt,
-    isPaused: false
+    isPaused: false,
+    roomCreatedAt: savedAt
   },
   savedAt
 );
@@ -447,6 +448,21 @@ var paused = sync.parseStoredSession(
   savedAt + 60000
 );
 eq("paused session stays paused after refresh", sync.calculateCurrentSeconds(paused, savedAt + 60000), 2700);
+eq("new session stores room createdAt", session.roomCreatedAt, savedAt);
+
+var heartbeatLater = JSON.parse(JSON.stringify(session));
+heartbeatLater.savedAt = savedAt + sync.SESSION_MAX_AGE_MS;
+heartbeatLater.roomCreatedAt = savedAt;
+eq(
+  "heartbeat does not keep a 3h-old room alive",
+  sync.parseStoredSession(JSON.stringify(heartbeatLater), savedAt + sync.ROOM_MAX_AGE_MS + 1),
+  null
+);
+eq(
+  "fresh heartbeat still resumes a young room",
+  sync.parseStoredSession(JSON.stringify(heartbeatLater), savedAt + 60 * 1000).roomId,
+  "BARCA"
+);
 
 eq("empty room has no leader", sync.pickRoomLeader([], now), null);
 

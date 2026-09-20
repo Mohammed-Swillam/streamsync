@@ -21,7 +21,8 @@
     netState: "offline",
     lastGoodSync: 0,
     claimExpiredRoom: false,
-    exiting: false
+    exiting: false,
+    roomCreatedAt: 0
   };
 
   var tickTimer = null;
@@ -232,10 +233,18 @@
       name: state.name,
       matchSecondsAtAnchor: state.matchSecondsAtAnchor,
       anchorTimestamp: state.anchorTimestamp,
-      isPaused: state.isPaused
+      isPaused: state.isPaused,
+      roomCreatedAt: state.roomCreatedAt
     });
     if (!session) return;
     storageSet(SESSION_KEY, JSON.stringify(session));
+  }
+
+  function rememberRoomCreatedAt(createdAt) {
+    createdAt = Math.floor(Number(createdAt) || 0);
+    if (!createdAt || createdAt === state.roomCreatedAt) return;
+    state.roomCreatedAt = createdAt;
+    persistSession();
   }
 
   function clearSession() {
@@ -528,20 +537,29 @@
       metaReadOk = true;
     } catch (err) {}
     var metaStatus = S.roomMetaStatus(meta, metaReadOk);
+    if (metaStatus === "unknown" && S.roomIsExpired({ createdAt: state.roomCreatedAt })) {
+      return { expired: true };
+    }
     if (metaStatus === "expired") {
       await wipeRoomRecords(state.roomId);
       if (!state.claimExpiredRoom) {
         return { expired: true };
       }
+      var claimedAt = Date.now();
       try {
-        await kvSet(keys.meta, S.encodeRoomMeta({ createdAt: Date.now() }));
+        await kvSet(keys.meta, S.encodeRoomMeta({ createdAt: claimedAt }));
       } catch (err) {}
+      rememberRoomCreatedAt(claimedAt);
       state.claimExpiredRoom = false;
     } else if (metaStatus === "missing") {
+      var createdAt = Date.now();
       try {
-        await kvSet(keys.meta, S.encodeRoomMeta({ createdAt: Date.now() }));
+        await kvSet(keys.meta, S.encodeRoomMeta({ createdAt: createdAt }));
       } catch (err) {}
+      rememberRoomCreatedAt(createdAt);
       state.claimExpiredRoom = false;
+    } else if (metaStatus === "live" && meta && meta.createdAt) {
+      rememberRoomCreatedAt(meta.createdAt);
     }
     var current = S.decodeRoster(await kvGet(keys.roster));
     if (current.indexOf(state.userId) === -1) {
@@ -893,6 +911,7 @@
     }
     state.participants = {};
     state.claimExpiredRoom = !options.resumed;
+    state.roomCreatedAt = Math.floor(Number(options.roomCreatedAt) || 0) || (options.resumed ? 0 : Date.now());
     persistName(state.name);
     rememberMe();
     persistSession();
@@ -936,6 +955,7 @@
     state.participants = {};
     state.claimExpiredRoom = false;
     state.exiting = false;
+    state.roomCreatedAt = 0;
     $("dashboardView").classList.add("hidden");
     $("welcomeView").classList.remove("hidden");
     $("exitRoomBtn").classList.add("hidden");
@@ -975,6 +995,7 @@
         matchSecondsAtAnchor: saved.matchSecondsAtAnchor,
         anchorTimestamp: saved.anchorTimestamp,
         isPaused: saved.isPaused,
+        roomCreatedAt: saved.roomCreatedAt,
         resumed: true
       });
     } else {
