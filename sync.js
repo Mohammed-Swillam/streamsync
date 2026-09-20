@@ -13,7 +13,7 @@
   var STALE_DROP_MS = 45 * 60 * 1000;
   var ROOM_MAX_AGE_MS = 3 * 60 * 60 * 1000;
   var SESSION_MAX_AGE_MS = 3 * 60 * 60 * 1000;
-  var ONLINE_MS = 25 * 1000;
+  var ONLINE_MS = 30 * 60 * 1000;
   var KV_BASE = "https://api.keyval.org";
   var STAMP_MS_MIN = 100000000000;
   var STAMP_MS_MAX = 40000000000000;
@@ -320,7 +320,8 @@
     (participants || []).forEach(function (p) {
       if (!p || p.left || (p.userId !== myUserId && shouldDrop(p, now))) return;
       var online = p.userId === myUserId ? true : isOnline(p, now);
-      var matchTime = calculateMatchTime(p, now);
+      var sampleAt = online ? now : (Number(p.lastSeen) || Number(p.anchorTimestamp) || now);
+      var matchTime = calculateMatchTime(p, sampleAt);
       list.push({
         userId: p.userId,
         name: p.name,
@@ -461,7 +462,8 @@
       count += 1;
       var live = isOnline(p, now);
       if (live) liveCount += 1;
-      var secs = calculateCurrentSeconds(p, now);
+      var sampleAt = live ? now : (Number(p.lastSeen) || Number(p.anchorTimestamp) || now);
+      var secs = calculateCurrentSeconds(p, sampleAt);
       if (!best) {
         best = p;
         bestSecs = secs;

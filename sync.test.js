@@ -267,6 +267,9 @@ eq(
 eq("escape html", sync.escapeHtml('<img src=x onerror="alert(1)">'), "&lt;img src=x onerror=&quot;alert(1)&quot;&gt;");
 
 eq("stale drop is 45 minutes", sync.STALE_DROP_MS, 45 * 60 * 1000);
+eq("present window is 30 minutes", sync.ONLINE_MS, 30 * 60 * 1000);
+eq("still present on the 30-minute mark", sync.isOnline({ lastSeen: now - sync.ONLINE_MS }, now), true);
+eq("last report just after 30 minutes", sync.isOnline({ lastSeen: now - sync.ONLINE_MS - 1 }, now), false);
 eq("room max age is 3 hours", sync.ROOM_MAX_AGE_MS, 3 * 60 * 60 * 1000);
 
 var dropped = sync.decorateParticipants(
@@ -339,16 +342,49 @@ var ghostAheadBoard = sync.decorateParticipants(
 );
 var ghostRow = ghostAheadBoard.filter(function (p) { return p.userId === "ghost"; })[0];
 var meRow = ghostAheadBoard.filter(function (p) { return p.isMe; })[0];
-eq("ghost stays on the board as last report", ghostAheadBoard.length, 2);
-eq("last-report clock keeps ticking", ghostRow.calculatedSeconds, 160);
-eq("last-report delay stays the gap from their last anchor", ghostRow.deltaFromMe, 50);
-eq("you stay at the live edge without the ghost", meRow.atLiveEdge, true);
-eq("you are the live leader", meRow.isLeader, true);
-eq("ghost does not take the live edge", ghostRow.isLeader, false);
-eq("ghost does not set Wait", meRow.spoilerWaitSeconds, 0);
-eq("online people sort ahead of ghosts", ghostAheadBoard.map(function (p) { return p.userId; }).join(","), "me,ghost");
+eq("a friend in Messenger still counts as present", ghostRow.online, true);
+eq("away clock keeps ticking for 30 minutes", ghostRow.calculatedSeconds, 160);
+eq("Wait still uses the friend who switched apps", meRow.spoilerWaitSeconds, 50);
+eq("you are behind that friend", meRow.atLiveEdge, false);
+eq("the away friend is still the live edge", ghostRow.isLeader, true);
+eq("people in Messenger sort by clock, not last-report", ghostAheadBoard.map(function (p) { return p.userId; }).join(","), "ghost,me");
 eq("wall clock formats last report time", sync.formatWallClock(new Date(2026, 8, 20, 8, 50).getTime()), "08:50");
 eq("wall clock ignores empty stamps", sync.formatWallClock(0), "");
+
+var lastReportT = ghostAheadT;
+var lastReportAgo = sync.ONLINE_MS + 1000;
+var lastReportBoard = sync.decorateParticipants(
+  [
+    {
+      userId: "ghost",
+      name: "Tom",
+      matchSecondsAtAnchor: 100,
+      anchorTimestamp: lastReportT - lastReportAgo,
+      lastSeen: lastReportT - lastReportAgo,
+      isPaused: false
+    },
+    {
+      userId: "me",
+      name: "Alex",
+      matchSecondsAtAnchor: 110,
+      anchorTimestamp: lastReportT,
+      lastSeen: lastReportT,
+      isPaused: false
+    }
+  ],
+  "me",
+  lastReportT
+);
+var lastReportRow = lastReportBoard.filter(function (p) { return p.userId === "ghost"; })[0];
+var lastReportMe = lastReportBoard.filter(function (p) { return p.isMe; })[0];
+eq("after 30 minutes they stay on the board as last report", lastReportBoard.length, 2);
+eq("after 30 minutes they are offline", lastReportRow.online, false);
+eq("inactive clock pauses at last report", lastReportRow.calculatedSeconds, 100);
+eq("you stay at the live edge without the inactive friend", lastReportMe.atLiveEdge, true);
+eq("you are the live leader after 30 minutes", lastReportMe.isLeader, true);
+eq("inactive friend does not take the live edge", lastReportRow.isLeader, false);
+eq("inactive friend does not set Wait", lastReportMe.spoilerWaitSeconds, 0);
+eq("present people sort ahead of last report", lastReportBoard.map(function (p) { return p.userId; }).join(","), "me,ghost");
 
 var ghostWaitBoard = sync.decorateParticipants(
   [
@@ -357,7 +393,7 @@ var ghostWaitBoard = sync.decorateParticipants(
       name: "Tom",
       matchSecondsAtAnchor: 50,
       anchorTimestamp: ghostAheadT,
-      lastSeen: ghostAheadT - 60 * 1000,
+      lastSeen: ghostAheadT - sync.ONLINE_MS - 1000,
       isPaused: false
     },
     {
@@ -380,7 +416,7 @@ var ghostWaitBoard = sync.decorateParticipants(
   "me",
   ghostAheadT
 );
-eq("live Wait ignores a slower ghost", ghostWaitBoard[0].spoilerWaitSeconds, 0);
+eq("live Wait ignores a slower last-report viewer", ghostWaitBoard[0].spoilerWaitSeconds, 0);
 eq("tied online viewers stay at the live edge", ghostWaitBoard.filter(function (p) { return p.isMe; })[0].atLiveEdge, true);
 
 var encodedMeta = sync.encodeRoomMeta({ createdAt: 1700000000000 });
@@ -529,7 +565,7 @@ var seededFromLive = sync.pickRoomLeader(
       name: "Old",
       matchSecondsAtAnchor: 2000,
       anchorTimestamp: now - 60 * 1000,
-      lastSeen: now - 60 * 1000,
+      lastSeen: now - sync.ONLINE_MS - 1000,
       isPaused: false
     },
     {
@@ -543,8 +579,8 @@ var seededFromLive = sync.pickRoomLeader(
   ],
   now
 );
-eq("join seed prefers an online viewer over a ghost", seededFromLive.name, "Sara");
-eq("join seed viewerCount ignores ghosts when someone is live", seededFromLive.viewerCount, 1);
+eq("join seed prefers a present viewer over a last-report", seededFromLive.name, "Sara");
+eq("join seed viewerCount ignores last-report when someone is present", seededFromLive.viewerCount, 1);
 
 var tieNow = 50_000;
 var tiedRanked = sync.decorateParticipants([
