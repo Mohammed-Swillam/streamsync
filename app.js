@@ -19,13 +19,20 @@
     participants: {},
     soundEnabled: false,
     netState: "offline",
-    lastGoodSync: 0
+    lastGoodSync: 0,
+    claimExpiredRoom: false,
+    exiting: false,
+    roomCreatedAt: 0,
+    rosterGeneration: 0
   };
 
   var tickTimer = null;
   var pollTimer = null;
   var heartbeatTimer = null;
   var pollInFlight = false;
+  var rosterInFlight = null;
+  var rosterInFlightRoom = "";
+  var publishEpoch = 0;
   var announceTimer = null;
   var eventSource = null;
   var broadcast = null;
@@ -230,10 +237,18 @@
       name: state.name,
       matchSecondsAtAnchor: state.matchSecondsAtAnchor,
       anchorTimestamp: state.anchorTimestamp,
-      isPaused: state.isPaused
+      isPaused: state.isPaused,
+      roomCreatedAt: state.roomCreatedAt
     });
     if (!session) return;
     storageSet(SESSION_KEY, JSON.stringify(session));
+  }
+
+  function rememberRoomCreatedAt(createdAt) {
+    createdAt = Math.floor(Number(createdAt) || 0);
+    if (!createdAt || createdAt === state.roomCreatedAt) return;
+    state.roomCreatedAt = createdAt;
+    persistSession();
   }
 
   function clearSession() {
@@ -363,11 +378,28 @@
     }, 250);
   }
 
+  async function kickExpiredRoom() {
+    if (!state.roomId) return;
+    await exitRoom({ expired: true });
+  }
+
   async function peekRoomLeader(roomId) {
     var room = S.sanitizeRoomCode(roomId);
     if (!room) return null;
     var keys = S.roomKeys(room);
-    var ids = S.decodeRoster(await kvGet(keys.roster));
+    var meta = null;
+    var metaReadOk = false;
+    try {
+      meta = S.decodeRoomMeta(await kvGet(keys.meta));
+      metaReadOk = true;
+    } catch (err) {}
+    if (S.roomMetaStatus(meta, metaReadOk) === "expired") return null;
+    var rosterKey = keys.roster;
+    if (meta && meta.createdAt) {
+      var genIds = S.decodeRoster(await kvGet(keys.rosterAt(meta.createdAt)));
+      if (genIds.length) rosterKey = keys.rosterAt(meta.createdAt);
+    }
+    var ids = S.decodeRoster(await kvGet(rosterKey));
     if (!ids.length) return null;
     var rows = await Promise.all(ids.map(function (id) {
       return kvGet(keys.user(id)).then(function (raw) {
@@ -417,7 +449,7 @@
 
   function applyViewer(record) {
     if (!record || !record.userId || record.userId === state.userId) return;
-    if (record.left) {
+    if (record.left || S.shouldDrop(record, Date.now())) {
       delete state.participants[record.userId];
       return;
     }
@@ -451,41 +483,165 @@
 
   async function publishMe(options) {
     options = options || {};
+    var epoch = publishEpoch;
     rememberMe();
     if (!state.roomId) return;
+    if (!options.leave && (state.exiting || epoch !== publishEpoch)) return;
     if (options.leave) clearSession();
     else persistSession();
     render();
     var keys = S.roomKeys(state.roomId);
     var payload = livePayload(options.leave ? "leave" : "sync");
-    publishLocal(payload);
+    if (!options.leave) publishLocal(payload);
     var kvOk = false;
     var liveOk = false;
     try {
       if (options.leave) {
         await kvSet(keys.user(state.userId), "LEFT");
       } else {
+        if (options.roster) {
+          var ensured = await ensureRoster();
+          if (epoch !== publishEpoch || !state.roomId || state.exiting) return;
+          if (ensured && ensured.expired) {
+            kvOk = true;
+            await kickExpiredRoom();
+            return;
+          }
+        }
+        if (epoch !== publishEpoch || !state.roomId || state.exiting) return;
         await kvSet(keys.user(state.userId), payload.body);
-        if (options.roster) await ensureRoster();
       }
       kvOk = true;
     } catch (err) {}
+    if (epoch !== publishEpoch || (!options.leave && (!state.roomId || state.exiting))) return;
     try {
       await publishLive(payload);
       liveOk = true;
     } catch (err) {}
     if (kvOk || liveOk) markLive();
     else setNetState(state.lastGoodSync ? "degraded" : "offline");
-    render();
+    if (state.roomId && epoch === publishEpoch) render();
   }
 
-  async function ensureRoster() {
-    var keys = S.roomKeys(state.roomId);
-    var current = S.decodeRoster(await kvGet(keys.roster));
+  function sameRoom(epoch, roomId) {
+    return epoch === publishEpoch && !!roomId && state.roomId === roomId;
+  }
+
+  async function joinGenerationRoster(keys, createdAt, epoch, roomId) {
+    var attempts = 0;
+    while (attempts < 4) {
+      attempts += 1;
+      if (!sameRoom(epoch, roomId)) return;
+      var latest = null;
+      try {
+        latest = S.decodeRoomMeta(await kvGet(keys.meta));
+      } catch (err) {}
+      if (!sameRoom(epoch, roomId)) return;
+      var gen = latest && latest.createdAt ? latest.createdAt : createdAt;
+      rememberRoomCreatedAt(gen);
+      state.rosterGeneration = gen;
+      var rosterKey = keys.rosterAt(gen);
+      var current = S.decodeRoster(await kvGet(rosterKey));
+      if (!sameRoom(epoch, roomId)) return;
+      if (current.indexOf(state.userId) === -1) {
+        current.push(state.userId);
+        await kvSet(rosterKey, S.encodeRoster(current));
+      }
+      if (!sameRoom(epoch, roomId)) return;
+      try {
+        latest = S.decodeRoomMeta(await kvGet(keys.meta));
+      } catch (err) {
+        return;
+      }
+      if (!latest || !latest.createdAt || latest.createdAt === gen) return;
+      createdAt = latest.createdAt;
+    }
+  }
+
+  async function runEnsureRoster() {
+    var epoch = publishEpoch;
+    var roomId = state.roomId;
+    if (!roomId) return { expired: false };
+    if (!state.claimExpiredRoom && S.roomIsExpired({ createdAt: state.roomCreatedAt })) {
+      return { expired: true };
+    }
+    var keys = S.roomKeys(roomId);
+    var meta = null;
+    var metaReadOk = false;
+    try {
+      meta = S.decodeRoomMeta(await kvGet(keys.meta));
+      metaReadOk = true;
+    } catch (err) {}
+    if (!sameRoom(epoch, roomId)) return { expired: false };
+    var metaStatus = S.roomMetaStatus(meta, metaReadOk);
+    if (metaStatus === "unknown" && S.roomIsExpired({ createdAt: state.roomCreatedAt })) {
+      return { expired: true };
+    }
+    if (metaStatus === "expired") {
+      if (!state.claimExpiredRoom) return { expired: true };
+      var claimedAt = Date.now();
+      try {
+        await kvSet(keys.meta, S.encodeRoomMeta({ createdAt: claimedAt }));
+      } catch (err) {
+        return { expired: true };
+      }
+      if (!sameRoom(epoch, roomId)) return { expired: false };
+      state.claimExpiredRoom = false;
+      await joinGenerationRoster(keys, claimedAt, epoch, roomId);
+      return { expired: false };
+    }
+    if (metaStatus === "missing") {
+      var stampedAt = Date.now();
+      try {
+        await kvSet(keys.meta, S.encodeRoomMeta({ createdAt: stampedAt }));
+      } catch (err) {}
+      if (!sameRoom(epoch, roomId)) return { expired: false };
+      rememberRoomCreatedAt(stampedAt);
+      state.claimExpiredRoom = false;
+    } else if (metaStatus === "live" && meta && meta.createdAt) {
+      rememberRoomCreatedAt(meta.createdAt);
+    }
+    if (!sameRoom(epoch, roomId)) return { expired: false };
+    var createdAt = state.rosterGeneration || state.roomCreatedAt || (meta && meta.createdAt);
+    var rosterKey = keys.roster;
+    if (state.rosterGeneration) {
+      rosterKey = keys.rosterAt(createdAt);
+    } else if (createdAt) {
+      var existingGen = S.decodeRoster(await kvGet(keys.rosterAt(createdAt)));
+      if (!sameRoom(epoch, roomId)) return { expired: false };
+      if (existingGen.length) {
+        rosterKey = keys.rosterAt(createdAt);
+        state.rosterGeneration = createdAt;
+      }
+    }
+    var current = S.decodeRoster(await kvGet(rosterKey));
+    if (!sameRoom(epoch, roomId)) return { expired: false };
     if (current.indexOf(state.userId) === -1) {
       current.push(state.userId);
-      await kvSet(keys.roster, S.encodeRoster(current));
+      await kvSet(rosterKey, S.encodeRoster(current));
     }
+    return { expired: false };
+  }
+
+  function ensureRoster() {
+    var roomId = state.roomId;
+    if (!roomId) return Promise.resolve({ expired: false });
+    if (rosterInFlight && rosterInFlightRoom === roomId) return rosterInFlight;
+    rosterInFlightRoom = roomId;
+    rosterInFlight = runEnsureRoster().then(function (result) {
+      if (rosterInFlightRoom === roomId) {
+        rosterInFlight = null;
+        rosterInFlightRoom = "";
+      }
+      return result;
+    }, function (err) {
+      if (rosterInFlightRoom === roomId) {
+        rosterInFlight = null;
+        rosterInFlightRoom = "";
+      }
+      throw err;
+    });
+    return rosterInFlight;
   }
 
   async function fetchRoom() {
@@ -493,8 +649,20 @@
     pollInFlight = true;
     try {
       var keys = S.roomKeys(state.roomId);
-      await ensureRoster();
-      var ids = S.decodeRoster(await kvGet(keys.roster));
+      var ensured = await ensureRoster();
+      if (!state.roomId) return;
+      if (ensured && ensured.expired) {
+        await kickExpiredRoom();
+        return;
+      }
+      var rosterKey = state.rosterGeneration
+        ? keys.rosterAt(state.rosterGeneration)
+        : keys.roster;
+      if (!state.rosterGeneration && state.roomCreatedAt) {
+        var genIds = S.decodeRoster(await kvGet(keys.rosterAt(state.roomCreatedAt)));
+        if (genIds.length) rosterKey = keys.rosterAt(state.roomCreatedAt);
+      }
+      var ids = S.decodeRoster(await kvGet(rosterKey));
       if (ids.indexOf(state.userId) === -1) ids.push(state.userId);
       var others = ids.filter(function (id) { return id !== state.userId; });
       var rows = await Promise.all(others.map(function (id) {
@@ -650,8 +818,15 @@
     var tickNow = S.alignNowToDisplayedSecond(myRecord(), Date.now());
     var list = rankedList(tickNow);
     var me = null;
-    var leader = list[0] || null;
-    list.forEach(function (p) { if (p.isMe) me = p; });
+    var leader = null;
+    var onlineCount = 0;
+    list.forEach(function (p) {
+      if (p.isMe) me = p;
+      if (p.online) {
+        onlineCount += 1;
+        if (!leader) leader = p;
+      }
+    });
     var mySecs = me ? me.calculatedSeconds : S.calculateCurrentSeconds(myRecord(), tickNow);
 
     $("myClock").textContent = S.formatMatchSeconds(mySecs);
@@ -674,7 +849,7 @@
     delete banner.dataset.lag;
     delete banner.dataset.wait;
 
-    if (list.length <= 1) {
+    if (onlineCount <= 1) {
       banner.dataset.role = "solo";
       $("roleTitle").textContent = "Room ready";
       $("roleTag").textContent = "SOLO";
@@ -817,6 +992,9 @@
       state.isPaused = false;
     }
     state.participants = {};
+    state.claimExpiredRoom = !options.resumed;
+    state.roomCreatedAt = Math.floor(Number(options.roomCreatedAt) || 0) || (options.resumed ? 0 : Date.now());
+    state.rosterGeneration = 0;
     persistName(state.name);
     rememberMe();
     persistSession();
@@ -846,13 +1024,25 @@
     playTone(520);
   }
 
-  async function exitRoom() {
-    try { await publishMe({ leave: true }); } catch (err) {}
+  async function exitRoom(options) {
+    options = options || {};
+    if (!state.roomId || state.exiting) return;
+    publishEpoch += 1;
+    state.exiting = true;
+    if (!options.expired) {
+      try { await publishMe({ leave: true }); } catch (err) {}
+    }
     stopTimers();
     stopLiveChannel();
     clearSession();
     state.roomId = "";
     state.participants = {};
+    state.claimExpiredRoom = false;
+    state.exiting = false;
+    state.roomCreatedAt = 0;
+    state.rosterGeneration = 0;
+    rosterInFlight = null;
+    rosterInFlightRoom = "";
     $("dashboardView").classList.add("hidden");
     $("welcomeView").classList.remove("hidden");
     $("exitRoomBtn").classList.add("hidden");
@@ -865,7 +1055,7 @@
     var url = new URL(window.location.href);
     url.searchParams.delete("room");
     history.replaceState({}, "", url);
-    showToast("Left the room");
+    showToast(options.expired ? "Room closed after 3 hours" : "Left the room");
     joinFollowLocked = false;
     scheduleJoinPeek();
   }
@@ -892,6 +1082,7 @@
         matchSecondsAtAnchor: saved.matchSecondsAtAnchor,
         anchorTimestamp: saved.anchorTimestamp,
         isPaused: saved.isPaused,
+        roomCreatedAt: saved.roomCreatedAt,
         resumed: true
       });
     } else {

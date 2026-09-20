@@ -10,8 +10,9 @@
 
   var ROOM_CODE_MAX = 24;
   var NAME_MAX = 20;
-  var STALE_DROP_MS = 4 * 60 * 60 * 1000;
-  var SESSION_MAX_AGE_MS = 8 * 60 * 60 * 1000;
+  var STALE_DROP_MS = 45 * 60 * 1000;
+  var ROOM_MAX_AGE_MS = 3 * 60 * 60 * 1000;
+  var SESSION_MAX_AGE_MS = 3 * 60 * 60 * 1000;
   var ONLINE_MS = 25 * 1000;
   var KV_BASE = "https://api.keyval.org";
   var STAMP_MS_MIN = 100000000000;
@@ -166,10 +167,46 @@
     var room = sanitizeRoomCode(roomId);
     return {
       roster: "ssfcR-" + room,
+      rosterAt: function (createdAt) {
+        var gen = Math.floor(Number(createdAt) || 0);
+        if (!gen) return "ssfcR-" + room;
+        return "ssfcR-" + room + "-" + gen;
+      },
+      meta: "ssfcM-" + room,
       user: function (userId) {
         return "ssfcU-" + room + "-" + userId;
       }
     };
+  }
+
+  function encodeRoomMeta(meta, now) {
+    now = now || Date.now();
+    var createdAt = Math.floor(Number(meta && meta.createdAt) || now);
+    if (!createdAt) createdAt = now;
+    return String(createdAt);
+  }
+
+  function decodeRoomMeta(raw) {
+    if (raw == null || raw === "") return null;
+    var createdAt = decodeMillis(raw);
+    if (!createdAt) createdAt = decodeStamp(raw);
+    if (!createdAt) return null;
+    return { createdAt: createdAt };
+  }
+
+  function roomIsExpired(meta, now, maxAgeMs) {
+    now = now == null ? Date.now() : Number(now);
+    if (!isFinite(now)) now = Date.now();
+    maxAgeMs = maxAgeMs == null ? ROOM_MAX_AGE_MS : maxAgeMs;
+    if (!meta || !meta.createdAt) return false;
+    return now - Number(meta.createdAt) > maxAgeMs;
+  }
+
+  function roomMetaStatus(meta, readOk, now) {
+    if (!readOk) return "unknown";
+    if (!meta) return "missing";
+    if (roomIsExpired(meta, now)) return "expired";
+    return "live";
   }
 
   function encodeViewer(participant, now) {
@@ -274,7 +311,9 @@
     var list = [];
     (participants || []).forEach(function (p) {
       if (!p || p.left || (p.userId !== myUserId && shouldDrop(p, now))) return;
-      var matchTime = calculateMatchTime(p, now);
+      var online = p.userId === myUserId ? true : isOnline(p, now);
+      var sampleAt = online ? now : (Number(p.lastSeen) || Number(p.anchorTimestamp) || now);
+      var matchTime = calculateMatchTime(p, sampleAt);
       list.push({
         userId: p.userId,
         name: p.name,
@@ -285,11 +324,12 @@
         matchTime: matchTime,
         calculatedSeconds: Math.floor(matchTime),
         isMe: p.userId === myUserId,
-        online: p.userId === myUserId ? true : isOnline(p, now)
+        online: online
       });
     });
 
     list.sort(function (a, b) {
+      if (a.online !== b.online) return a.online ? -1 : 1;
       if (b.matchTime !== a.matchTime) {
         return b.matchTime - a.matchTime;
       }
@@ -297,19 +337,20 @@
       return String(a.name).localeCompare(String(b.name));
     });
 
-    var leaderSecs = list.length ? list[0].calculatedSeconds : 0;
+    var live = [];
     var me = null;
     for (var i = 0; i < list.length; i++) {
-      if (list[i].isMe) {
-        me = list[i];
-        break;
-      }
+      if (list[i].online) live.push(list[i]);
+      if (list[i].isMe) me = list[i];
     }
+    var leaderSecs = live.length ? live[0].calculatedSeconds : 0;
     var mySecs = me ? me.calculatedSeconds : 0;
-    var slowestSecs = list.length ? list[list.length - 1].calculatedSeconds : 0;
+    var slowestSecs = live.length ? live[live.length - 1].calculatedSeconds : 0;
+    var spoilerWaitSeconds = live.length ? leaderSecs - slowestSecs : 0;
 
     return list.map(function (p, index) {
       var deltaFromLeader = p.calculatedSeconds - leaderSecs;
+      var atLiveEdge = p.online && deltaFromLeader === 0;
       return {
         userId: p.userId,
         name: p.name,
@@ -319,13 +360,13 @@
         isMe: p.isMe,
         online: p.online,
         rank: index + 1,
-        isLeader: index === 0,
-        atLiveEdge: deltaFromLeader === 0,
+        isLeader: p.online && index === 0,
+        atLiveEdge: atLiveEdge,
         deltaFromLeader: deltaFromLeader,
         deltaFromMe: p.calculatedSeconds - mySecs,
         lagFromLeader: Math.abs(deltaFromLeader),
         bucket: delayBucket(deltaFromLeader),
-        spoilerWaitSeconds: leaderSecs - slowestSecs
+        spoilerWaitSeconds: spoilerWaitSeconds
       };
     });
   }
@@ -363,7 +404,8 @@
       matchSecondsAtAnchor: Math.max(0, Math.floor(Number(input.matchSecondsAtAnchor) || 0)),
       anchorTimestamp: Math.floor(Number(input.anchorTimestamp) || now),
       isPaused: !!(input && input.isPaused),
-      savedAt: now
+      savedAt: now,
+      roomCreatedAt: Math.floor(Number(input.roomCreatedAt) || 0)
     };
   }
 
@@ -382,8 +424,11 @@
     var session = buildSession(data, now);
     if (!session) return null;
     var savedAt = Number(data.savedAt) || session.anchorTimestamp;
+    var roomCreatedAt = Math.floor(Number(data.roomCreatedAt) || session.roomCreatedAt || 0);
+    if (roomCreatedAt && roomIsExpired({ createdAt: roomCreatedAt }, now)) return null;
     if (now - savedAt > SESSION_MAX_AGE_MS) return null;
     session.savedAt = savedAt;
+    session.roomCreatedAt = roomCreatedAt;
     session.matchSecondsAtAnchor = Math.max(0, Math.floor(Number(data.matchSecondsAtAnchor) || 0));
     session.anchorTimestamp = Math.floor(Number(data.anchorTimestamp) || now);
     session.isPaused = !!data.isPaused;
@@ -401,12 +446,29 @@
     now = now || Date.now();
     var best = null;
     var bestSecs = -1;
+    var bestOnline = false;
+    var liveCount = 0;
     var count = 0;
     (participants || []).forEach(function (p) {
       if (!p || p.left || shouldDrop(p, now)) return;
       count += 1;
-      var secs = calculateCurrentSeconds(p, now);
-      if (!best || secs > bestSecs) {
+      var live = isOnline(p, now);
+      if (live) liveCount += 1;
+      var sampleAt = live ? now : (Number(p.lastSeen) || Number(p.anchorTimestamp) || now);
+      var secs = calculateCurrentSeconds(p, sampleAt);
+      if (!best) {
+        best = p;
+        bestSecs = secs;
+        bestOnline = live;
+        return;
+      }
+      if (live && !bestOnline) {
+        best = p;
+        bestSecs = secs;
+        bestOnline = true;
+        return;
+      }
+      if (live === bestOnline && secs > bestSecs) {
         best = p;
         bestSecs = secs;
       }
@@ -420,7 +482,7 @@
       isPaused: !!best.isPaused,
       lastSeen: best.lastSeen,
       calculatedSeconds: bestSecs,
-      viewerCount: count
+      viewerCount: liveCount || count
     };
   }
 
@@ -438,6 +500,7 @@
     ROOM_CODE_MAX: ROOM_CODE_MAX,
     NAME_MAX: NAME_MAX,
     STALE_DROP_MS: STALE_DROP_MS,
+    ROOM_MAX_AGE_MS: ROOM_MAX_AGE_MS,
     SESSION_MAX_AGE_MS: SESSION_MAX_AGE_MS,
     ONLINE_MS: ONLINE_MS,
     KV_BASE: KV_BASE,
@@ -456,6 +519,10 @@
     makeUserId: makeUserId,
     ntfyTopic: ntfyTopic,
     roomKeys: roomKeys,
+    encodeRoomMeta: encodeRoomMeta,
+    decodeRoomMeta: decodeRoomMeta,
+    roomIsExpired: roomIsExpired,
+    roomMetaStatus: roomMetaStatus,
     encodeViewer: encodeViewer,
     decodeViewer: decodeViewer,
     encodeRoster: encodeRoster,
