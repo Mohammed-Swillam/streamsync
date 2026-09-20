@@ -681,7 +681,11 @@ button:focus-visible {
 
 .you-pill { color: var(--you); }
 .pause-pill { color: var(--behind); }
-.away-pill { color: var(--muted); }
+.away-pill {
+  color: var(--muted);
+  white-space: nowrap;
+  letter-spacing: 0.04em;
+}
 
 .delta {
   font-variant-numeric: tabular-nums;

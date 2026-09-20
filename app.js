@@ -790,7 +790,8 @@
       if (!item.online) {
         var away = document.createElement("span");
         away.className = "away-pill";
-        away.textContent = "last report";
+        var reportedAt = S.formatWallClock(item.lastSeen);
+        away.textContent = reportedAt ? "last report " + reportedAt : "last report";
         left.appendChild(away);
       }
       var clock = document.createElement("div");
