@@ -813,6 +813,24 @@
     });
   }
 
+  function setHeroArabic(kind, name) {
+    var el = $("roleHeroArabic");
+    el.textContent = "";
+    if (kind !== "ahead" && kind !== "behind") {
+      el.classList.add("hidden");
+      return;
+    }
+    el.classList.remove("hidden");
+    if (kind === "behind") {
+      el.appendChild(document.createTextNode("إنت متأخر يابيه"));
+      return;
+    }
+    el.appendChild(document.createTextNode("إنت سابق يا "));
+    var who = document.createElement("bdi");
+    who.textContent = name || "";
+    el.appendChild(who);
+  }
+
   function render() {
     if (!state.roomId) return;
     var tickNow = S.alignNowToDisplayedSecond(myRecord(), Date.now());
@@ -846,6 +864,7 @@
     boardInvite.classList.remove("hidden");
     $("roleText").classList.remove("hidden");
     heroLabel.classList.remove("hidden");
+    setHeroArabic("");
     delete banner.dataset.lag;
     delete banner.dataset.wait;
 
@@ -873,6 +892,7 @@
         heroLabel.classList.add("hidden");
         heroValue.textContent = "Wait " + wait + "s";
         heroValue.classList.remove("hidden");
+        setHeroArabic("ahead", state.name);
       } else {
         banner.dataset.role = "tied";
         heroLabel.textContent = "Tied at the live edge";
@@ -889,6 +909,7 @@
       heroLabel.textContent = "behind " + leader.name;
       heroValue.textContent = lag + "s";
       heroValue.classList.remove("hidden");
+      setHeroArabic("behind");
     }
 
     renderLeaderboard(list);

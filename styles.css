@@ -527,6 +527,23 @@ button:focus-visible {
 
 .banner[data-role="ahead"] .role-hero-label { display: none; }
 
+.role-hero-arabic {
+  display: block;
+  margin: 0 0 10px;
+  color: inherit;
+  font-family: "SF Arabic", "Geeza Pro", "Noto Naskh Arabic", "Noto Sans Arabic", Tahoma, sans-serif;
+  font-size: clamp(1.05rem, 4.2vw, 1.45rem);
+  font-weight: 700;
+  line-height: 1.35;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.banner[data-role="ahead"] .role-hero-arabic { color: var(--wait-high); }
+.banner[data-role="ahead"][data-wait="low"] .role-hero-arabic { color: var(--wait-low); }
+.banner[data-role="ahead"][data-wait="mid"] .role-hero-arabic { color: var(--wait-mid); }
+.banner[data-role="behind"] .role-hero-arabic { color: var(--behind); }
+
 .role-hero-label {
   display: block;
   color: var(--muted);
